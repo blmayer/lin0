@@ -1,0 +1,11 @@
+#!/bin/sh
+
+export PATH=/bin
+
+mount -t proc /proc /proc
+mount -t sysfs /sys /sys
+mount -t tmpfs /tmp /run
+mount -t tmpfs /var/run /var/run
+mount -t vfat /dev/mmcblk0p1 /boot
+
+getty 115200 /dev/tty1 linux
