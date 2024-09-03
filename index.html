@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>b</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:24em;margin:auto}</style>
+<pre>
+<i><b>lin0</b></i>
+
+lin0 (linux zero) is a super minimal source-based
+linux meta-distribution, primarily aimed at power
+users or minimalism enthusiasts. it was born from
+exercises in how minimal a linux system can get.
+
+the distro features a barebones system built from
+scratch:
+
+- the linux kernel, without initrd
+- musl libc
+- mksh (the myr korn shell)
+- tcc (tiny C compiler)
+- the init is a simple shell script
+
+all the rest it optional and can be built from
+this if needed.
+
+
+<i>release notes</i>
+
+v0.0.1: initial release
+
+
+<i>usage</i>
+
+after built the system should boot to a login
+prompt, the default user is root and password is
+lin0.
+
+
+<i>installation</i>
+
+the installation is a 3-step process:
+
+- copy your kernel config to <i>configs/MODEL-linux.config</i>
+- run ./make.sh, this will build the system
+- copy the generated rootfs to your target system
+
+
+<i>license</i>
+
+this software is licensed under the BSD 2-clause
+license.
+
+(C) 2023-24 Brian Mayer
+</pre>
