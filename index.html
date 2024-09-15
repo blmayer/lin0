@@ -42,6 +42,15 @@ this if needed.
 v0.0.1: initial release
 
 
+<b>images</b>
+
+if you don't want to build the whole system we
+provide a tarball without the kernel so you can
+build just the kernel, or copy it from somewhere.
+
+- <a href=rootfs.tar.xz download>rootfs.tar.xz (current)</a>
+
+
 <b>usage</b>
 
 after built the system should boot to a login
@@ -50,6 +59,9 @@ lin0.
 
 
 <b>installation</b>
+
+
+<i>from source</i>
 
 clone this repo with:
 
@@ -60,6 +72,13 @@ the installation is a 3-step process:
 - copy your kconfig to <i>configs/MODEL-linux.config</i>
 - run ./make.sh, this will build the system
 - copy the generated rootfs to your target system
+
+
+<i>from tarball</i>
+
+if you downloaded the tarball you can simply untar
+it to your destination partition. then copy your
+kernel to the boot folder.
 
 
 <b>license</b>
