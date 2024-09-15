@@ -1,9 +1,5 @@
 #!/bin/sh
 
-# create missing links
-ln -sv ../rootfs/lib/libc.so ../rootfs/bin/ldd
-ln -sv ../rootfs/lib/libc.so ../rootfs/bin/ld
-
 # make kernel
 mkdir ../rootfs/boot
 cd "linux-$linuxver"
