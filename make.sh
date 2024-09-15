@@ -5,7 +5,7 @@ arch="$(uname -m)"
 
 muslver="1.2.5"
 tccver="0.9.27"
-linuxver="6.10.4"
+linuxver="6.11.0"
 sslver="3.9.2"
 
 muslurl="https://musl.libc.org/releases/musl-$muslver.tar.gz"
@@ -87,6 +87,10 @@ export CC="$(realpath ../rootfs/bin/musl-gcc)"
 	cd ..
 }
 
+# create missing links
+ln -sv ../rootfs/lib/libc.so ../rootfs/bin/ldd
+ln -sv ../rootfs/lib/libc.so ../rootfs/bin/ld
+
 echo "runnning specific platform commands"
 . ../scripts/"post-install-$platform.sh"
 
@@ -95,11 +99,11 @@ cd ../
 echo "copying files"
 mkdir rootfs/etc rootfs/sbin
 cp -r etc rootfs/etc
-cp files/init rootfs/sbin
+cp init rootfs/sbin
 
 echo "copying extra packages"
 mkdir -p rootfs/share/pkg
 cp pkgs/* rootfs/share/pkg
 
 echo "compressing rootfs..."
-tar cf rootfs.tar.gz rootfs/*
+tar cfJ "rootfs-$arch.tar.xz" rootfs/*
