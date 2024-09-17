@@ -98,7 +98,7 @@ postinstall="../scripts/post-install-$platform.sh"
 cd ../
 
 echo "copying files"
-mkdir rootfs/etc rootfs/sbin
+mkdir -p rootfs/etc rootfs/sbin rootfs/dev rootfs/sys rootfs/proc rootfs/var/run
 cp -r etc rootfs/etc
 cp init rootfs/sbin
 
