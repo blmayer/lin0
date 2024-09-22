@@ -48,8 +48,22 @@ if you don't want to build the whole system we
 provide a tarball without the kernel so you can
 build just the kernel, or copy it from somewhere.
 
+
+<i>tarballs</i>
+
 - <a href=rootfs-amd64.tar.xz download>rootfs.tar.xz (amd64)</a>
-- <a href=rootfs-aarch64.tar.xz download>rootfs.tar.xz (aarch64)</a>
+- <a href=rootfs-arm64.tar.xz download>rootfs.tar.xz (arm64)</a>
+
+
+<i>docker</i>
+
+we also provide docker images for quick testing or
+for building applications. this image features an
+easy way to use the tcc compiler.
+
+	docker push bleemayer/lin0:latest
+
+architectures supported are the same as tarballs.
 
 
 <b>usage</b>
