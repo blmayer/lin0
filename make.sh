@@ -22,7 +22,7 @@ cd build
 	curl "$muslurl" | tar xz
 	musl="$(basename "$muslurl")"
 	cd "musl-$muslver"
-	./configure --prefix=../../rootfs
+	./configure --prefix=../../rootfs --disable-static
 	make && make install
 	make obj/musl-gcc
 	sed -i "s@ld-musl-$arch.so.1@libc.so@" ../../rootfs/lib/musl-gcc.specs
