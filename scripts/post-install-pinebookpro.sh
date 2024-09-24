@@ -7,7 +7,8 @@ make -j 4
 make INSTALL_MOD_PATH=../../rootfs INSTALL_PATH=../../rootfs/boot install modules_install
 cd ..
 
-# install iw firmware
+# install brcm firmware
 git clone https://kernel.googlesource.com/pub/scm/linux/kernel/git/firmware/linux-firmware.git
 [ -d ../rootfs/lib/firmware/brcm ] || mkdir -p ../rootfs/lib/firmware/brcm
 cp linux-firmware/brcm/brcmfmac43430a0-sdio.bin ../rootfs/lib/firmware/brcm/
+cp linux-firmware/brcm/LICENSE.broadcom_bcm43xx ../rootfs/lib/firmware/brcm/
