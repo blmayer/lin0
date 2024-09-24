@@ -57,7 +57,7 @@ there are generic ones, without the linux kernel:
 - <a href=rootfs-amd64.tar.xz download>rootfs.tar.xz (amd64)</a>
 - <a href=rootfs-arm64.tar.xz download>rootfs.tar.xz (arm64)</a>
 
-and for specific platforms, which include the kernel:
+and for specific platforms, that include the kernel:
 
 - <a href=rootfs-pinebookpro.tar.xz download>rootfs.tar.xz (pinebook pro)</a>
 
@@ -92,7 +92,7 @@ clone this repo with:
 the installation is a 3-step process:
 
 - copy your kconfig to <i>configs/MODEL-linux.config</i>
-- run PLATFORM=<PLATFORM> ./make.sh, this will
+- run platform=PLATFORM ./make.sh, this will
   build the root filesystem. see the available
   platforms in the configs folder
 - copy the generated rootfs to your target system
