@@ -9,4 +9,5 @@ cd ..
 
 # install iw firmware
 git clone https://kernel.googlesource.com/pub/scm/linux/kernel/git/firmware/linux-firmware.git
-cd linux-firmware
+mkdir ../rootfs/lib/firmware
+cp linux-firmware/iwlwifi-7260-17.ucode ../rootfs/lib/firmware

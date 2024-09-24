@@ -26,6 +26,11 @@ cd build
 	make && make install
 	make obj/musl-gcc
 	sed -i "s@ld-musl-$arch.so.1@libc.so@" ../../rootfs/lib/musl-gcc.specs
+	#
+	# create missing links
+	ln -sv ../../rootfs/lib/libc.so ../../rootfs/bin/ldd
+	ln -sv ../../rootfs/lib/libc.so ../../rootfs/bin/ld
+
 	cd ..
 }
 
@@ -35,7 +40,7 @@ export CC="$(realpath ../rootfs/bin/musl-gcc)"
 	echo "building tcc..."
 	curl "$tccurl" | tar xj
 	cd "tcc-$tccver"
-	./configure --prefix=/home/lord/git/lin0/rootfs --cc="$CC -static -no-pie" --enable-static --config-musl --elfinterp=/lib/libc.so --sysincludepaths=/include --libpaths=/lib --crtprefix=/lib
+	./configure --prefix=/home/lord/git/lin0/rootfs --cc="$CC" --enable-shared-config-musl --elfinterp=/lib/libc.so --sysincludepaths=/include --libpaths=/lib --crtprefix=/lib
 	make && make install
 	cat <<- EOF > ../../rootfs/bin/ar
 	#!/bin/sh
@@ -84,13 +89,9 @@ export CC="$(realpath ../rootfs/bin/musl-gcc)"
 	chmod +x Build.sh 
 	./Build.sh
 	install -c -s -m 555 mksh ../../rootfs/bin/sh
-	install -c -m 444 lksh.1 mksh.1 ../../rootfs/share/man/man1/
+	install -c -m 444 -D lksh.1 mksh.1 ../../rootfs/share/man/man1/
 	cd ..
 }
-
-# create missing links
-ln -sv ../rootfs/lib/libc.so ../rootfs/bin/ldd
-ln -sv ../rootfs/lib/libc.so ../rootfs/bin/ld
 
 echo "runnning specific platform commands"
 postinstall="../scripts/post-install-$platform.sh"
@@ -103,11 +104,13 @@ cp -r etc rootfs/etc
 cp init rootfs/sbin
 
 echo "copying extra packages"
-mkdir -p rootfs/share/pkg
-for pkg in $(find pkgs)
-do
-	cp pkgs/"$pkg" rootfs/share/pkg
-done
+[ -f pkgs/* ] && {
+	mkdir -p rootfs/share/pkg
+	for pkg in $(find pkgs)
+	do
+		cp pkgs/"$pkg" rootfs/share/pkg
+	done
+}
 
 echo "compressing rootfs..."
-tar cfJ "rootfs-$arch.tar.xz" rootfs/*
+tar cfJ "rootfs-$platform.tar.xz" rootfs/*

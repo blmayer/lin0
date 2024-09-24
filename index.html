@@ -34,7 +34,8 @@ scratch:
 - simple configs and a shell script init
 
 all the rest it optional and can be built from
-this if needed.
+this if needed. we provide optimized configurations
+for some platforms.
 
 
 <b>release notes</b>
@@ -51,8 +52,14 @@ build just the kernel, or copy it from somewhere.
 
 <i>tarballs</i>
 
+there are generic ones, without the linux kernel:
+
 - <a href=rootfs-amd64.tar.xz download>rootfs.tar.xz (amd64)</a>
 - <a href=rootfs-arm64.tar.xz download>rootfs.tar.xz (arm64)</a>
+
+and for specific platforms, which include the kernel:
+
+- <a href=rootfs-pinebookpro.tar.xz download>rootfs.tar.xz (pinebook pro)</a>
 
 
 <i>docker</i>
@@ -85,7 +92,9 @@ clone this repo with:
 the installation is a 3-step process:
 
 - copy your kconfig to <i>configs/MODEL-linux.config</i>
-- run ./make.sh, this will build the system
+- run PLATFORM=<PLATFORM> ./make.sh, this will
+  build the root filesystem. see the available
+  platforms in the configs folder
 - copy the generated rootfs to your target system
 
 the installer will copy any extra packages present
