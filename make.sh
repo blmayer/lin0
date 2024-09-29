@@ -11,7 +11,7 @@ sslver="3.9.2"
 muslurl="https://musl.libc.org/releases/musl-$muslver.tar.gz"
 tccurl="https://mirror.marwan.ma/savannah/tinycc/tcc-$tccver.tar.bz2"
 linuxurl="https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$linuxver.tar.xz"
-toyboxurl="https://codeload.github.com/landley/toybox/zip/refs/heads/master"
+toyboxurl="https://github.com/landley/toybox.git"
 mkshurl="http://www.mirbsd.org/MirOS/dist/mir/mksh/mksh-R59c.tgz"
 
 [ -d build ] || mkdir build
@@ -70,11 +70,10 @@ export CC="$(realpath ../rootfs/bin/musl-gcc)"
 	cd ..
 }
 
-[ -d "toybox-master" ] || {
+[ -d "toybox" ] || {
 	echo "installing toybox..."
-	curl "$toyboxurl" > toybox.zip
-	unzip toybox.zip
-	cd toybox-master
+	git clone "$toyboxurl"
+	cd toybox
 	cp ../../configs/"$platform"-toybox.config .config
 	make toybox
 	make PREFIX=../../rootfs/bin install_flat
