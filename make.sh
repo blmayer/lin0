@@ -40,7 +40,7 @@ export CC="$(realpath ../rootfs/bin/musl-gcc)"
 	echo "building tcc..."
 	curl "$tccurl" | tar xj
 	cd "tcc-$tccver"
-	./configure --prefix=/home/lord/git/lin0/rootfs --cc="$CC" --config-musl --elfinterp=/lib/libc.so --sysincludepaths=/include --libpaths=/lib --crtprefix=/lib --disable-static
+	./configure --prefix=/home/lord/git/lin0/rootfs --cc="$CC" --enable-shared-config-musl --elfinterp=/lib/libc.so --sysincludepaths=/include --libpaths=/lib --crtprefix=/lib
 	make && make install
 	cat <<- EOF > ../../rootfs/bin/ar
 	#!/bin/sh
