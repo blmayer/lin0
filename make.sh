@@ -4,12 +4,11 @@ set -e
 arch="$(uname -m)"
 
 muslver="1.2.5"
-tccver="0.9.27"
 linuxver="6.11"
 sslver="3.9.2"
 
 muslurl="https://musl.libc.org/releases/musl-$muslver.tar.gz"
-tccurl="https://mirror.marwan.ma/savannah/tinycc/tcc-$tccver.tar.bz2"
+tccurl="https://repo.or.cz/tinycc.git"
 linuxurl="https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$linuxver.tar.xz"
 toyboxurl="https://github.com/landley/toybox.git"
 mkshurl="http://www.mirbsd.org/MirOS/dist/mir/mksh/mksh-R59c.tgz"
@@ -36,12 +35,16 @@ cd build
 
 export CC="$(realpath ../rootfs/bin/musl-gcc)"
 
-[ -d "tcc-$tccver" ] || {
+[ -d "tinycc" ] || {
 	echo "building tcc..."
-	curl "$tccurl" | tar xj
-	cd "tcc-$tccver"
-	./configure --prefix=/home/lord/git/lin0/rootfs --cc="$CC" --config-musl --elfinterp=/lib/libc.so --sysincludepaths=/include --libpaths=/lib --crtprefix=/lib --disable-static
-	make && make install
+	git clone "$tccurl"
+	cd "tinycc"
+	
+	echo "applying patch"
+	git apply ../../patches/tcc-*.patch
+
+	./configure --prefix=/ --cc="$CC" --config-musl --elfinterp=/lib/libc.so --sysincludepaths=/include --libpaths=/lib --crtprefix=/lib --disable-static --disable-rpath
+	make && make DESTDIR=../../rootfs install
 	cat <<- EOF > ../../rootfs/bin/ar
 	#!/bin/sh
 	cc -ar $@

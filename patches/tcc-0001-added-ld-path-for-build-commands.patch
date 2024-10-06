@@ -1,0 +1,45 @@
+From 6ddc45c082ae2ffa560530fc409db5d585b84b96 Mon Sep 17 00:00:00 2001
+From: myr <myr@terminal.pink>
+Date: Sat, 5 Oct 2024 23:41:02 -0300
+Subject: [PATCH] added ld path for build commands
+
+---
+ Makefile     | 2 +-
+ lib/Makefile | 4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 13260d07..61380142 100644
+--- a/Makefile
++++ b/Makefile
+@@ -276,7 +276,7 @@ endif
+ 
+ # convert "include/tccdefs.h" to "tccdefs_.h"
+ %_.h : include/%.h conftest.c
+-	$S$(CC) -DC2STR $(filter %.c,$^) -o c2str.exe && ./c2str.exe $< $@
++	$S$(CC) -DC2STR $(filter %.c,$^) -o c2str.exe && ../musl-1.2.5/lib/libc.so ./c2str.exe $< $@
+ 
+ # target specific object rule
+ $(X)%.o : %.c $(LIBTCC_INC)
+diff --git a/lib/Makefile b/lib/Makefile
+index c95a3e30..88f5bf6f 100644
+--- a/lib/Makefile
++++ b/lib/Makefile
+@@ -8,12 +8,12 @@ VPATH = $(TOPSRC)/lib $(TOPSRC)/win32/lib
+ T = $(or $(CROSS_TARGET),$(NATIVE_TARGET),unknown)
+ X = $(if $(CROSS_TARGET),$(CROSS_TARGET)-)
+ 
+-XTCC ?= $(TOP)/$(X)tcc$(EXESUF)
++XTCC ?= LD_LIBRARY_PATH=.. ../../musl-1.2.5/lib/libc.so $(TOP)/$(X)tcc$(EXESUF)
+ XCC = $(XTCC)
+ XAR = $(XTCC) -ar
+ XFLAGS-unx = -B$(TOPSRC)
+ XFLAGS-win = -B$(TOPSRC)/win32 -I$(TOPSRC)/include
+-XFLAGS = $(XFLAGS$(XCFG)) -I$(TOP)
++XFLAGS = $(XFLAGS$(XCFG)) -I$(TOP) -I$(TOP)/../../rootfs/include
+ BFLAGS = -bt
+ XCFG = $(or $(findstring -win,$T),-unx)
+ S = $(if $(findstring yes,$(SILENT)),@$(info * $@))
+-- 
+2.46.2
+
