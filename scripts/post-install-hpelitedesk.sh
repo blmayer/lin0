@@ -4,9 +4,11 @@
 [ -d ../linux-firmware ] || git clone https://kernel.googlesource.com/pub/scm/linux/kernel/git/firmware/linux-firmware.git
 cd "linux-$linuxver"
 make -j 4
-[ -d ../rootfs/boot ] || mkdir ../rootfs/boot
+[ -d ../../rootfs/boot ] || mkdir ../../rootfs/boot
 make INSTALL_MOD_PATH=../../rootfs INSTALL_PATH=../../rootfs/boot install modules_install
+cd ..
 
-[ -d ../rootfs/firmware ] || mkdir ../rootfs/firmware
-cp ../linux-firmware/LICENSE.iwlwifi_firmware ../../firmware
+echo "copying firmware license"
+[ -d ../rootfs/lib/firmware ] || mkdir ../rootfs/lib/firmware
+cp linux-firmware/LICENSE.iwlwifi_firmware ../rootfs/lib/firmware
 cd ..

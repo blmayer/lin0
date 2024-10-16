@@ -5,7 +5,6 @@ arch="$(uname -m)"
 
 muslver="1.2.5"
 linuxver="6.11"
-sslver="3.9.2"
 
 muslurl="https://musl.libc.org/releases/musl-$muslver.tar.gz"
 tccurl="https://repo.or.cz/tinycc.git"
@@ -25,10 +24,10 @@ cd build
 	make && make install
 	make obj/musl-gcc
 	sed -i "s@ld-musl-$arch.so.1@libc.so@" ../../rootfs/lib/musl-gcc.specs
-	#
+
 	# create missing links
-	ln -sv ../../rootfs/lib/libc.so ../../rootfs/bin/ldd
-	ln -sv ../../rootfs/lib/libc.so ../../rootfs/bin/ld
+	ln -srv ../../rootfs/lib/libc.so ../../rootfs/bin/ldd
+	ln -srv ../../rootfs/lib/libc.so ../../rootfs/bin/ld
 
 	cd ..
 }
@@ -101,7 +100,7 @@ postinstall="../scripts/post-install-$platform.sh"
 cd ../
 
 echo "copying files"
-mkdir -p rootfs/etc rootfs/sbin rootfs/dev rootfs/sys rootfs/proc rootfs/var/run
+mkdir -p rootfs/etc rootfs/sbin rootfs/dev rootfs/sys rootfs/proc rootfs/var/run rootfs/home/root
 cp -r etc rootfs/etc
 cp init rootfs/sbin
 
@@ -113,6 +112,10 @@ echo "copying extra packages"
 		cp pkgs/"$pkg" rootfs/share/pkg
 	done
 }
+
+echo "cleaning up some files"
+rm rootfs/lib/musl-gcc.specs
+rm rootfs/bin/musl-gcc
 
 echo "compressing rootfs..."
 tar cfJ "rootfs-$platform.tar.xz" rootfs/*
