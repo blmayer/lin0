@@ -31,7 +31,7 @@ scratch:
 - toybox
 - simple configs and a shell script init
 
-all the rest it optional and can be built from
+all the rest is optional and can be built from
 this if needed. we provide optimized configurations
 for some platforms.
 
@@ -44,29 +44,31 @@ v0.0.1: initial release
 <b>images</b>
 
 if you don't want to build the whole system we
-provide a tarball without the kernel so you can
-build just the kernel, or copy it from somewhere.
+provide system images in various formats so you can
+start with a ready environment.
 
 
 <i>tarballs</i>
 
-there are generic ones, without the linux kernel:
+our tarballs are compressed with xz, thus .tar.xz
+files, these are targeted at platforms, and do not
+include the linux kernel:
 
-- <a href=rootfs-amd64.tar.xz download>rootfs.tar.xz (amd64)</a>
-- <a href=rootfs-arm64.tar.xz download>rootfs.tar.xz (arm64)</a>
+- <a href=rootfs-amd64.tar.xz download>amd64</a> [3.2Mb]
+- <a href=rootfs-arm64.tar.xz download>arm64</a> [3.0Mb]
 
-and for specific platforms, that include the kernel:
+and for specific platforms, including the kernel:
 
-- <a href=rootfs-hpelitedesk.tar.xz download>rootfs.tar.xz (hp elite desk)</a>
-- <a href=rootfs-pinebookpro.tar.xz download>rootfs.tar.xz (pinebook pro)</a>
-- <a href=rootfs-rpi3b+.tar.xz download>rootfs.tar.xz (raspiberry pi 3b+)</a>
+- <a href=rootfs-hpelitedesk.tar.xz download>hp elite desk 800 g1</a> [13Mb]
+- <a href=rootfs-pinebookpro.tar.xz download>pinebook pro</a> [13Mb]
+- <a href=rootfs-rpi3b+.tar.xz download>raspiberry pi 3b+</a> [26Mb]
 
 
 <i>docker</i>
 
 we also provide <a href="//hub.docker.com/r/bleemayer/lin0">docker images</a> for quick testing or
-for building applications. this image features an
-easy way to use the tcc compiler.
+building applications. this image features an easy
+way to use musl libc and the tcc compiler.
 
 	docker push bleemayer/lin0:latest
 
@@ -112,6 +114,7 @@ kernel to the boot folder.
 
 features that may fit lin0:
 
+- improve rpi3b+ rootfs
 - support mod loading and daemons in init script
 - improve issue file or provide a login program: ly
 - create man pages
