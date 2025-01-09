@@ -13,11 +13,11 @@ toyboxurl="https://github.com/landley/toybox.git"
 mkshurl="http://www.mirbsd.org/MirOS/dist/mir/mksh/mksh-R59c.tgz"
 bashurl="https://ftp.gnu.org/gnu/bash/bash-5.2.37.tar.gz"
 makeurl="https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz"
-bmakeurl="https://www.crufty.net/ftp/pub/sjg/bmake.tar.gz"
-curlurl="https://curl.se/tiny/tiny-curl-8.11.0.tar.xz"
+#bmakeurl="https://www.crufty.net/ftp/pub/sjg/bmake.tar.gz"
+curlurl="https://curl.se/tiny/tiny-curl-8.4.0.tar.gz"
 dashurl="http://gondor.apana.org.au/~herbert/dash/files/dash-0.5.12.tar.gz"
 
-[ -z "$PLATFORM" ] && PLATFORM="generic-$(uname -m)"
+[ -z "$PLATFORM" ] && PLATFORM="$(uname -m)"
 
 export outdir="$(pwd)/rootfs"
 
@@ -147,7 +147,7 @@ git clone "$tccurl"
 curl "$muslurl" | tar xz
 git clone "$toyboxurl"
 curl "$mkshurl" | tar xz
-curl "$bmakeurl" | tar xz
+curl "$makeurl" | tar xz
 curl "$curlurl" | tar xz
 curl "$linuxurl" | tar xz
 cd ../../ # back to lin0 dir
