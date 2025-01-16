@@ -158,33 +158,18 @@ echo ""
 mkdir -p rootfs/sbin rootfs/etc rootfs/home/root rootfs/dev/pts rootfs/proc rootfs/sys rootfs/tmp
 
 echo ""
-echo "extracting sources to target" 
-echo ""
-cp script/make-target.sh rootfs/tmp
-cd rootfs/tmp
-git clone "$tccurl"
-curl "$muslurl" | tar xz
-git clone "$toyboxurl"
-curl "$mkshurl" | tar xz
-curl "$makeurl" | tar xz
-curl "$wolfsslurl" | tar xz
-curl "$curlurl" | tar xz
-curl "$linuxurl" | tar xz
-cd ../../ # back to lin0 dir
-$(./scripts/chroot.sh)
-
-echo ""
-echo "runnning specific platform commands"
-echo ""
-postinstall="scripts/post-install-$PLATFORM.sh"
-[ -f "$postinstall" ] && . "$postinstall"
-
-echo ""
 echo "copying files"
 echo ""
+cp scripts/make-target.sh rootfs/tmp
+cp pkgs/* rootfs/tmp/
+git clone "$tccurl" rootfs/tmp/
 cp -r etc rootfs/etc
-cp init rootfs/sbin
+cp init rootfs/sbin/
 
+echo ""
+echo "running in chroot" 
+echo ""
+$(./scripts/chroot.sh)
 
 echo ""
 echo "cleaning up some files"
@@ -192,6 +177,12 @@ echo ""
 rm rootfs/lib/musl-gcc.specs
 rm rootfs/bin/musl-gcc
 rm -rf rootfs/tmp/*
+
+echo ""
+echo "runnning specific platform commands"
+echo ""
+postinstall="scripts/post-install-$PLATFORM.sh"
+[ -f "$postinstall" ] && . "$postinstall"
 
 echo ""
 echo "compressing rootfs..."
