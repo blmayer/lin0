@@ -14,6 +14,7 @@ mkshurl="http://www.mirbsd.org/MirOS/dist/mir/mksh/mksh-R59c.tgz"
 bashurl="https://ftp.gnu.org/gnu/bash/bash-5.2.37.tar.gz"
 makeurl="https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz"
 #bmakeurl="https://www.crufty.net/ftp/pub/sjg/bmake.tar.gz"
+wolfsslurl="https://github.com/wolfSSL/wolfssl/archive/refs/tags/v5.7.6-stable.tar.gz"
 curlurl="https://curl.se/tiny/tiny-curl-8.4.0.tar.gz"
 dashurl="http://gondor.apana.org.au/~herbert/dash/files/dash-0.5.12.tar.gz"
 
@@ -62,6 +63,24 @@ export CC="$outdir/bin/musl-gcc"
 	cd toybox
 	make LDFLAGS='-static --no-pie' toybox
 	make PREFIX=$outdir/bin install_flat
+	cd ..
+}
+
+[ -d "wolfssl-5.7.6" ] || {
+	echo "building wolfssl"
+	curl "$wolfsslurl" | tar xz
+	cd wolfssl-5.7.6/
+	./configure --prefix=$outdir --host=x86_64-linux-gnu --target=x86_64-linux-musl --enable-opensslextra
+	make && make install
+	cd ..
+}
+
+[ -d "tiny-curl-8.4.0" ] || {
+	echo "building tinycurl"
+	curl "$curlurl" | tar xz
+	cd tiny-curl-8.4.0/
+	./configure --prefix=$outdir --host=x86_64-linux-gnu --target=x86_64-linux-musl --with-wolfssl --disable-libcurl-option --disable-static
+	make && make install
 	cd ..
 }
 
@@ -148,6 +167,7 @@ curl "$muslurl" | tar xz
 git clone "$toyboxurl"
 curl "$mkshurl" | tar xz
 curl "$makeurl" | tar xz
+curl "$wolfsslurl" | tar xz
 curl "$curlurl" | tar xz
 curl "$linuxurl" | tar xz
 cd ../../ # back to lin0 dir
