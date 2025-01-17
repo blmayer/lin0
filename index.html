@@ -33,13 +33,28 @@ scratch:
 
 all the rest is optional and can be built from
 this if needed. we provide optimized configurations
-for some platforms.
+for some platforms, lin0 also gives you, for your
+convenience, much needed programs: make and curl.
 
 
 <b>release notes</b>
 
 v0.0.2: improved compiler toolchain
 v0.0.1: initial release
+
+
+<b>roadmap</b>
+
+features that may fit lin0:
+
+- make system compile itself
+- improve rpi3b+ rootfs
+- support mod loading and daemons in init script
+- improve issue file or provide a login program: ly
+- create man pages
+- support rpi zero w
+- support rpi cm5
+- add lin0 to fetch <i>et al</i> commands
 
 
 <b>images</b>
@@ -81,13 +96,6 @@ way to use musl libc and the tcc compiler.
 architectures supported are the same as tarballs.
 
 
-<b>usage</b>
-
-after built the system should boot to a login
-prompt, the default user is root and password is
-lin0.
-
-
 <b>installation</b>
 
 
@@ -106,7 +114,7 @@ the installation is a 3-step process:
 - copy the generated rootfs to your target system
 
 the installer will copy any extra packages present
-at the pkg folder to your rootfs/share/pkg folder.
+at the pkg folder to your /home/root/ folder.
 
 
 <i>from tarball</i>
@@ -116,18 +124,33 @@ it to your destination partition. then copy your
 kernel to the boot folder.
 
 
-<b>roadmap</b>
+<b>usage</b>
 
-features that may fit lin0:
+after built the system should boot to a login
+prompt, the default user is root and password is
+lin0.
 
-- make system compile itself
-- improve rpi3b+ rootfs
-- support mod loading and daemons in init script
-- improve issue file or provide a login program: ly
-- create man pages
-- support rpi zero w
-- support rpi cm5
-- add lin0 to fetch <i>et al</i> commands
+however, your lin0 system is not ready yet for real
+work: some configuration is needed, since we don't
+want to give you a default. hence, you need to:
+
+- create the /etc/resolv.conf file
+- add more users
+- change the default password
+- install needed software, e.g. wpa_supplicant
+
+the rest is up to you. welcome to lin0!
+
+
+<b>getting help</b>
+
+use the mailing list, to ask a question just send
+an email to:
+
+lin0 AT terminal DOT pink
+
+i plan to create a wiki to let users contribute
+easily.
 
 
 <b>license</b>
