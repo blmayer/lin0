@@ -1,3 +1,6 @@
+#!/bin/sh
+
+# running inside chroot
 echo "building target system"
 
 # create missing links
