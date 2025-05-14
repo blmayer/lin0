@@ -56,6 +56,7 @@ The distro features a barebones system built from scratch:
 
 ### Current Work
 
+- ~~~Support RPi Compute Module 5~~~
 - Adjust kernel build:
   - Build HP EliteDesk with firmware built-in
 
@@ -68,7 +69,6 @@ The distro features a barebones system built from scratch:
 - Improve issue file or add a login program like `ly`
 - Create man pages
 - Support RPi Zero W
-- Support RPi Compute Module 5
 - Add lin0 to `fetch` et al. commands
 
 ---
@@ -81,20 +81,18 @@ We provide system images in multiple formats so you can get started without buil
 
 ### Tarballs (.tar.xz)
 
-These are **platform-targeted rootfs tarballs** (no kernel):
+These are **architecture-targeted rootfs tarballs** (no kernel):
 
-**v0.0.2**
 - [`x86_64`](./rootfs-x86_64.tar.xz) (3.3 MB)
-
-**v0.0.1**
 - [`arm64`](./rootfs-arm64.tar.xz) (3.0 MB)
 
 
-### Platform-specific (includes kernel)
+And these are Platform-specific and it includes the kernel:
 
 - [`HP EliteDesk 800 G1`](./rootfs-hpelitedesk.tar.xz) (13 MB)
 - [`Pinebook Pro`](./rootfs-pinebookpro.tar.xz) (13 MB)
 - [`Raspberry Pi 3B+`](./rootfs-rpi3b+.tar.xz) (26 MB)
+- [`Raspberry Pi CM5 + io board`](./rootfs-rpi-cm5io.tar.xz) (32 MB)
 
 
 ### Docker
