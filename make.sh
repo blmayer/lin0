@@ -2,7 +2,7 @@
 
 set -e
 arch="$(uname -m)"
-platforms="aarch64 x86_64 hpelitedesk pinebookpro rpi3bplus rpi5"
+platforms="aarch64 x86_64 hpelitedesk pinebookpro rpi3bplus rpi5 m1mac"
 
 muslver="1.2.5"
 linuxver="6.13.3"
