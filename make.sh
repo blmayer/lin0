@@ -2,10 +2,10 @@
 
 set -e
 arch="$(uname -m)"
-platforms="aarch64 x86_64 hpelitedesk pinebookpro rpi3bplus rpi5 m1mac"
+platforms="aarch64 x86_64 hpelitedesk pinebookpro rpi3bplus rpi5 rpi-cm5io m1mac"
 
 muslver="1.2.5"
-linuxver="6.13.3"
+linuxver="6.19.6"
 
 muslurl="https://musl.libc.org/releases/musl-$muslver.tar.gz"
 tccurl="https://repo.or.cz/tinycc.git"
@@ -100,11 +100,11 @@ export CC="$CC -static --no-pie"
 	
 	# --config-static is needed because it is compiled for musl in another libc
 	./configure --prefix=/ \
-		--sysincludepaths=$outdir/include \
-		--libpaths=$outdir/lib \
+		--sysincludepaths=/include:/home/lord/lin0/rootfs/include \
+		--libpaths=/lib \
 		--tccdir=/lib \
-		--crtprefix=$outdir/lib \
-		--elfinterp=$outdir/lib/libc.so \
+		--crtprefix=/lib \
+		--elfinterp=/lib/libc.so \
 		--config-static \
 		--config-bcheck=no \
 		--disable-rpath \
@@ -113,40 +113,6 @@ export CC="$CC -static --no-pie"
 	cat <<- EOF > $outdir/bin/ar
 	#!/bin/sh
 	tcc -ar \$@
-	EOF
-	chmod +x $outdir/bin/ar
-	cd ..
-	rm -rf tinycc
-}
-
-export CC="$outdir/bin/tcc -static"
-rm -f ../rootfs/lib/musl-gcc.specs
-rm -f ../rootfs/bin/musl-gcc
-
-[ -d "tinycc" ] || {
-	echo "building host tcc - pass 2"
-	git clone "$tccurl"
-	cd "tinycc"
-	
-	#echo "applying patch"
-	#git apply ../../patches/tcc-*.patch
-	
-	./configure --prefix=/ \
-		--sysincludepaths=$outdir/include:/include \
-		--libpaths=$outdir/lib:/lib \
-		--crtprefix=/lib \
-		--ar="$outdir/bin/tcc -ar" \
-		--elfinterp=/lib/libc.so \
-		--config-static \
-		--config-bcheck=no \
-		--disable-rpath \
-		--config-musl
-
-	make && make DESTDIR=$outdir install
-	mv $outdir/bin/tcc $outdir/bin/cc
-	cat <<- EOF > $outdir/bin/ar
-	#!/bin/sh
-	cc -ar \$@
 	EOF
 	chmod +x $outdir/bin/ar
 	cd ..
@@ -162,11 +128,11 @@ mkdir -p rootfs/sbin rootfs/etc rootfs/home/root rootfs/dev/pts rootfs/proc root
 echo ""
 echo "copying files"
 echo ""
-[ -f scripts/make-target.sh ] ||  cp scripts/make-target.sh rootfs/tmp/
-[ -f scripts/after-boot.sh ] ||  cp scripts/after-boot.sh rootfs/root/
+cp -v scripts/make-target.sh rootfs/tmp/
+cp -v scripts/after-boot.sh rootfs/home/root/
+cp -rv etc rootfs/etc
+cp -v init rootfs/sbin/
 rm -rf rootfs/tmp/tinycc && git clone "$tccurl" rootfs/tmp/tinycc
-cp -r etc rootfs/etc
-cp init rootfs/sbin/
 
 echo ""
 echo "running chroot" 
@@ -178,8 +144,14 @@ echo ""
 echo "runnning specific platform commands"
 echo ""
 postinstall="scripts/post-install-$PLATFORM.sh"
-[ -f "$postinstall" ] && . "$postinstall"
-sudo scripts/umounts.sh
+[ -f "$postinstall" ] && sh "$postinstall"
+
+echo ""
+echo "cleaning up..."
+echo ""
+rm -f rootfs/lib/musl-gcc.specs
+rm -f rootfs/bin/musl-gcc
+rm -rf rootfs/tmp/*
 
 echo ""
 echo "compressing rootfs..."
