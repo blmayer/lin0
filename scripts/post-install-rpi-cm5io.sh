@@ -18,26 +18,25 @@ echo "Fetching RPi non-free firmware..."
 
 # Install DTBs (bcm2712 for CM5, RPi 5)
 echo "Installing DTBs..."
-cp -v firmware-rpi/boot/dtbs/bcm2712-rpi-cm5*.dtb ../rootfs/boot/
-cp -v firmware-rpi/boot/dtbs/bcm2712-rpi-5*.dtb ../rootfs/boot/
+cp -v firmware-rpi/boot/bcm2712-rpi-cm5*.dtb ../rootfs/boot/
+cp -v firmware-rpi/boot/bcm2712-rpi-5*.dtb ../rootfs/boot/
 
 # Install boot files (bootcode.bin, start*.elf, fixup*.dat)
 echo "Installing boot files..."
-cp -v firmware-rpi/boot/{bootcode.bin,start*.elf,fixup*.dat} ../rootfs/boot/
+cp -v firmware-rpi/boot/bootcode.bin ../rootfs/boot/
+cp -v firmware-rpi/boot/start*.elf ../rootfs/boot/
+cp -v firmware-rpi/boot/fixup*.dat ../rootfs/boot/
 
 # Install WiFi/BT firmware (BCM43455/BCM43456 on CM5)
 echo "Installing WiFi/BT firmware..."
 mkdir -p ../rootfs/lib/firmware/brcm
-cp -v firmware-nonfree/cypress/cyfmac43455-sdio-standard.bin ../rootfs/lib/firmware/brcm/brcmfmac43455.bin
-cp -v firmware-nonfree/cypress/cyfmac43455-sdio.clm_blob ../rootfs/lib/firmware/brcm/
-cp -v firmware-nonfree/cypress/cyfmac43456-sdio-standard.bin ../rootfs/lib/firmware/brcm/brcmfmac43456.bin
+cp -v firmware-nonfree/debian/config/brcm80211/cypress/cyfmac43455-sdio-standard.bin ../rootfs/lib/firmware/brcm/brcmfmac43455.bin
+cp -v firmware-nonfree/debian/config/brcm80211/cypress/cyfmac43455-sdio.clm_blob ../rootfs/lib/firmware/brcm/
+cp -v firmware-nonfree/debian/config/brcm80211/cypress/cyfmac43456-sdio-standard.bin ../rootfs/lib/firmware/brcm/brcmfmac43456.bin
 
 # Install additional broadcom firmware from linux-firmware
 echo "Installing additional firmware..."
 cp -v linux-firmware/brcm/brcmfmac43430a0-sdio.bin ../rootfs/lib/firmware/brcm/
-cp -v linux-firmware/brcm/brcmfmac43430-sdio.clm_blob ../rootfs/lib/firmware/brcm/
-cp -v linux-firmware/brcm/brcmfmac43455-sdio.clm_blob ../rootfs/lib/firmware/brcm/
-cp -v linux-firmware/brcm/brcmfmac43456-sdio.clm_blob ../rootfs/lib/firmware/brcm/
 
 # Install overlays
 [ -d ../rootfs/boot/overlays ] || mkdir -p ../rootfs/boot/overlays
