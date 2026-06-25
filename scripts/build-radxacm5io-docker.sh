@@ -1,7 +1,7 @@
 #!/bin/sh
 # Radxa CM5 + IO — official-hybrid image build (stock loader/GPT + lin0 on p3).
 #
-# Invoked by:  PLATFORM=radxacm5io ./make.sh
+# Invoked by:  make radxacm5io
 # Also:        ./scripts/build-radxacm5io-docker.sh
 #
 # Output (repo root):
@@ -26,7 +26,7 @@ OFFICIAL_IMG="${OFFICIAL_IMG:-$REPO_ROOT/build/official-radxa-inspect/radxa-cm5-
 P3_SIZE_MB="${P3_SIZE_MB:-128}"
 
 echo "lin0 platform=$PLATFORM (Radxa CM5 IO — official hybrid only)"
-echo "  entry     : PLATFORM=$PLATFORM ./make.sh"
+echo "  entry     : make radxacm5io"
 echo "  linux     : $LINUXVER (mainline kernel for Image/DTB/rootfs)"
 echo "  donor img : $OFFICIAL_IMG"
 echo "  p3 size   : ${P3_SIZE_MB} MiB lin0 root"
@@ -44,7 +44,7 @@ fi
 
 if ! docker info >/dev/null 2>&1; then
 	echo "error: Docker is not running. Start Docker Desktop / colima, then:" >&2
-	echo "  PLATFORM=radxacm5io ./make.sh" >&2
+	echo "  make radxacm5io" >&2
 	exit 1
 fi
 
