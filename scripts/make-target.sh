@@ -11,7 +11,15 @@ ln -srv lib/libc.so bin/ld
 echo "building target tcc..."
 cd /tmp/tinycc
 
-./configure --prefix=/ --cc=cc --sysincludepaths=/include --config-musl --libpaths=/lib --elfinterp=/lib/libc.so --crtprefix=/lib --tccdir=/lib
+./configure --prefix=/ \
+	--cc=tcc \
+	--sysincludepaths=/include \
+	--config-musl \
+	--libpaths=/lib \
+	--elfinterp=/lib/libc.so \
+	--crtprefix=/lib \
+	--tccdir=/lib \
+	--config-bcheck=no
 make && make install
 mv /bin/tcc /bin/cc
 cd ..
