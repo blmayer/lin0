@@ -5,7 +5,7 @@
 #   make list | help | clean | distclean
 #
 # Make rebuilds a target when it is missing or older than any prerequisite.
-# Env (radxacm5io only): LINUXVER, OFFICIAL_IMG, P3_SIZE_MB
+# Radxa: make radxacm5io  (RADXA_LINUXVER, RADXA_P3_MB, OFFICIAL_IMG / RADXA_OFFICIAL)
 
 SHELL := /bin/sh
 .SHELLFLAGS := -ec
@@ -31,6 +31,7 @@ MKSHURL    := http://www.mirbsd.org/MirOS/dist/mir/mksh/mksh-$(MKSHVER).tgz
 MAKEURL    := https://ftp.gnu.org/gnu/make/make-$(MAKEVER).tar.gz
 WOLFSSLURL := https://github.com/wolfSSL/wolfssl/archive/refs/tags/v$(WOLFSSLVER)-stable.tar.gz
 CURLURL    := https://curl.se/tiny/tiny-curl-$(CURLVER).tar.gz
+REGDBURL   := https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/plain
 
 PLATFORMS  := aarch64 x86_64 hpelitedesk pinebookpro rpi3bplus rpi5 rpizero radxacm5io
 STD_PLATS  := $(filter-out radxacm5io,$(PLATFORMS))
@@ -105,9 +106,15 @@ TOYBOX_BIN := $(ROOTFS)/bin/toybox
 HOST_MAKE  := $(ROOTFS)/bin/make
 HOST_SH    := $(ROOTFS)/bin/sh
 HOST_CC    := $(ROOTFS)/bin/cc
-ROOT_INIT  := $(ROOTFS)/sbin/init
+ROOT_INIT  := $(ROOTFS)/bin/init
 WOLFSSL_A  := $(ROOTFS)/lib/libwolfssl.a
 CURL_SO    := $(ROOTFS)/lib/libcurl.so
+REGDB      := $(ROOTFS)/lib/firmware/regulatory.db
+
+$(REGDB):
+	mkdir -p $(dir $@)
+	curl -fsSL -o $@ "$(REGDBURL)/regulatory.db"
+	curl -fsSL -o $@.p7s "$(REGDBURL)/regulatory.db.p7s"
 
 LINUX_CFG  = $(CONFIGS)/$(1)-linux.config
 TOYBOX_CFG = $(CONFIGS)/$(1)-toybox.config
@@ -201,10 +208,10 @@ $(HOST_CC): $(HOST_MAKE) $(HOST_SH) $(call LINUX_OK,$(PLATFORM)) $(TCC_SRC)/.git
 # skeleton + chroot target-tcc
 $(ROOT_INIT): $(HOST_CC) $(TOYBOX_BIN) $(REPO_ROOT)/init $(SCRIPTS)/make-target.sh
 	@echo "==> skeleton + chroot tcc"
-	mkdir -p $(ROOTFS)/sbin $(ROOTFS)/etc $(ROOTFS)/home/root $(ROOTFS)/dev/pts \
+	mkdir -p $(ROOTFS)/bin $(ROOTFS)/etc $(ROOTFS)/home/root $(ROOTFS)/dev/pts \
 		$(ROOTFS)/proc $(ROOTFS)/sys $(ROOTFS)/tmp $(ROOTFS)/var/run $(ROOTFS)/run
 	cp -a $(REPO_ROOT)/etc/. $(ROOTFS)/etc/
-	cp $(REPO_ROOT)/init $(ROOTFS)/sbin/init
+	cp $(REPO_ROOT)/init $(ROOTFS)/bin/init
 	mkdir -p $(ROOTFS)/tmp
 	cp $(SCRIPTS)/make-target.sh $(ROOTFS)/tmp/make-target.sh
 	test -d $(TCC_SRC)/.git || git clone "$(TCCURL)" $(TCC_SRC)
@@ -269,20 +276,264 @@ force-platform-$(1):
 endef
 $(foreach p,$(STD_PLATS),$(eval $(call PLAT_RECURSE,$(p))))
 
-.PHONY: radxacm5io arm64 radxa radxa-cm5 radxa-cm5-io cm5io cm5-io
-.PHONY: rpi-zero rpi-zero-w rpizero-w rpi0 rpi0w zerow rpizero-img
+# --- aliases ----------------------------------------------------------------
 
-radxacm5io:
-	@echo "Building platform: radxacm5io (Docker official-hybrid)"
-	PLATFORM=radxacm5io $(SCRIPTS)/build-radxacm5io-docker.sh
+.PHONY: arm64 radxa radxa-cm5 radxa-cm5-io cm5io cm5-io
+.PHONY: rpi-zero rpi-zero-w rpizero-w rpi0 rpi0w zerow rpizero-img
 
 arm64: aarch64
 radxa radxa-cm5 radxa-cm5-io cm5io cm5-io: radxacm5io
 rpi-zero rpi-zero-w rpizero-w rpi0 rpi0w zerow: rpizero
 
-# SD card image from rootfs-rpizero.tar.xz (needs Linux: losetup, sfdisk, mkfs)
 rpizero-img: rootfs-rpizero.tar.xz
 	$(SCRIPTS)/mkimg-rpizero.sh
+
+# =============================================================================
+# Radxa CM5 + IO — all logic in this Makefile (Docker only when host needs it)
+# =============================================================================
+#   make radxacm5io              # rootfs+kernel + hybrid image
+#   make radxacm5io-rootfs       # kernel/userspace only (Linux, or inside Docker)
+#   make radxacm5io-img          # pack lin0-radxacm5io.img from existing rootfs
+#
+# Env: RADXA_LINUXVER (default master), RADXA_P3_MB (default 128), OFFICIAL_IMG
+# =============================================================================
+
+HOST_OS          := $(shell uname -s)
+RADXA_LINUXVER   ?= master
+RADXA_P3_MB      ?= 128
+RADXA_P3_LBA     := 679936
+RADXA_DTB        := rk3588s-radxa-cm5-io.dtb
+RADXA_IMG        := $(REPO_ROOT)/lin0-radxacm5io.img
+RADXA_OFFICIAL   ?= $(BUILD)/official-radxa-inspect/radxa-cm5-io_bookworm_cli_b3.output.img
+RADXA_BUILDER    := lin0-radxacm5io-builder:latest
+RADXA_ROOT_LABEL := lin0root
+RADXA_ROOT_UUID  := a1ce5ba1-b0fe-43c3-b85c-eca170319b83
+RADXA_CMN        := console=tty0 rootwait rw init=/bin/init
+
+.PHONY: radxacm5io radxacm5io-builder radxacm5io-rootfs radxacm5io-img radxacm5io-bootfiles
+
+radxacm5io: ## full Radxa hybrid image
+	@echo "lin0 radxacm5io  host=$(HOST_OS)  linux=$(RADXA_LINUXVER)  -> $(RADXA_IMG)"
+	@test -f "$(RADXA_OFFICIAL)" || { echo "missing official donor: $(RADXA_OFFICIAL)" >&2; exit 1; }
+ifneq ($(HOST_OS),Linux)
+	@$(MAKE) radxacm5io-builder
+	docker run --rm --platform linux/arm64 \
+		-e RADXA_LINUXVER="$(RADXA_LINUXVER)" \
+		-v "$(REPO_ROOT):/work" -w /work \
+		"$(RADXA_BUILDER)" \
+		make radxacm5io-rootfs RADXA_LINUXVER="$(RADXA_LINUXVER)"
+else
+	@$(MAKE) radxacm5io-rootfs RADXA_LINUXVER="$(RADXA_LINUXVER)"
+endif
+	@$(MAKE) radxacm5io-img
+
+radxacm5io-builder:
+	@docker info >/dev/null 2>&1 || { echo "start Docker first" >&2; exit 1; }
+	@echo "==> docker builder $(RADXA_BUILDER)"
+	@mkdir -p "$(BUILD)"
+	@printf '%s\n' \
+		'FROM debian:bookworm-slim' \
+		'ENV DEBIAN_FRONTEND=noninteractive' \
+		'RUN apt-get update && apt-get install -y --no-install-recommends \' \
+		' build-essential gcc g++ make bison flex bc kmod cpio rsync \' \
+		' gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \' \
+		' libncurses-dev libssl-dev libelf-dev dwarves \' \
+		' git curl ca-certificates xz-utils bzip2 \' \
+		' python3 python3-dev python3-setuptools python3-pyelftools \' \
+		' device-tree-compiler u-boot-tools swig libgnutls28-dev \' \
+		' dosfstools e2fsprogs fdisk util-linux parted gdisk musl-tools xxd \' \
+		' && rm -rf /var/lib/apt/lists/*' \
+		'WORKDIR /work' \
+		> "$(BUILD)/Dockerfile.radxa"
+	docker build --platform linux/arm64 -t "$(RADXA_BUILDER)" -f "$(BUILD)/Dockerfile.radxa" "$(REPO_ROOT)"
+
+# Linux-only recipe: musl + kernel + toybox + mksh + tcc + skeleton + boot files
+radxacm5io-rootfs:
+	@test "$$(uname -s)" = Linux || { echo "radxacm5io-rootfs needs Linux (use: make radxacm5io)" >&2; exit 1; }
+	@echo "==> [radxacm5io] musl $(MUSLVER)"
+	mkdir -p "$(BUILD)" "$(ROOTFS)"
+	@if [ ! -d "$(MUSL_SRC)" ]; then curl -fsSL "$(MUSLURL)" | tar xz -C "$(BUILD)"; fi
+	cd "$(MUSL_SRC)" && ./configure --prefix="$(ROOTFS)" --enable-static && \
+		$(MAKE) -j$$(nproc) && $(MAKE) install
+	@echo "==> [radxacm5io] linux $(RADXA_LINUXVER)"
+	@# build tree on /tmp (case-sensitive; safe under Docker bind mounts)
+	LINUX_BUILD="/tmp/lin0-build/linux-$(RADXA_LINUXVER)"; \
+	mkdir -p /tmp/lin0-build "$(BUILD)/dtbs" "$(BUILD)/kheaders"; \
+	if [ ! -f "$$LINUX_BUILD/Makefile" ]; then \
+		rm -rf "$$LINUX_BUILD"; \
+		case "$(RADXA_LINUXVER)" in \
+			master|main) git clone --depth=1 https://github.com/torvalds/linux.git "$$LINUX_BUILD" ;; \
+			*) git clone --depth=1 --branch "$(RADXA_LINUXVER)" https://github.com/torvalds/linux.git "$$LINUX_BUILD" \
+				|| git clone --depth=1 https://github.com/torvalds/linux.git "$$LINUX_BUILD" ;; \
+		esac; \
+	fi; \
+	cd "$$LINUX_BUILD"; \
+	test -f arch/arm64/boot/dts/rockchip/$(RADXA_DTB:.dtb=.dts) || { \
+		echo "missing $(RADXA_DTB:.dtb=.dts) — use RADXA_LINUXVER=master" >&2; exit 1; }; \
+	if [ ! -f "$(CONFIGS)/radxacm5io-linux.config" ] || \
+	   [ "$(CONFIGS)/radxacm5io-kernel.fragment" -nt "$(CONFIGS)/radxacm5io-linux.config" ]; then \
+		sh "$(SCRIPTS)/gen-radxacm5io-linux-config.sh" "$$LINUX_BUILD"; \
+	fi; \
+	cp "$(CONFIGS)/radxacm5io-linux.config" .config; \
+	$(MAKE) ARCH=arm64 olddefconfig; \
+	if grep -q '^CONFIG_MODULES=y' .config; then \
+		$(MAKE) ARCH=arm64 -j$$(nproc) Image modules dtbs; \
+		INSTALL_MOD_PATH="$(ROOTFS)" $(MAKE) ARCH=arm64 modules_install; \
+	else \
+		$(MAKE) ARCH=arm64 -j$$(nproc) Image dtbs; \
+	fi; \
+	mkdir -p "$(ROOTFS)/boot"; \
+	cp -f arch/arm64/boot/Image "$(ROOTFS)/boot/Image"; \
+	cp -f arch/arm64/boot/dts/rockchip/$(RADXA_DTB) "$(ROOTFS)/boot/$(RADXA_DTB)"; \
+	cp -f arch/arm64/boot/dts/rockchip/$(RADXA_DTB) "$(BUILD)/dtbs/"; \
+	rm -rf /tmp/lin0-kheaders && mkdir -p /tmp/lin0-kheaders; \
+	INSTALL_HDR_PATH=/tmp/lin0-kheaders $(MAKE) ARCH=arm64 headers_install; \
+	KHDR=""; \
+	for c in /tmp/lin0-kheaders/include /tmp/lin0-kheaders/usr/include \
+		"$$LINUX_BUILD/usr/include"; do \
+		[ -f "$$c/linux/version.h" ] && KHDR=$$c && break; \
+	done; \
+	test -n "$$KHDR"; \
+	cp -a "$$KHDR/." "$(BUILD)/kheaders/"; \
+	mkdir -p "$(ROOTFS)/usr/include" && cp -a "$$KHDR/." "$(ROOTFS)/usr/include/"
+	@echo "==> [radxacm5io] toybox"
+	@if [ ! -d "$(TOYBOX_SRC)/.git" ]; then git clone --depth=1 "$(TOYBOXURL)" "$(TOYBOX_SRC)"; fi
+	cd "$(TOYBOX_SRC)" && git fetch origin && git checkout master && git pull --ff-only origin master || true
+	cd "$(TOYBOX_SRC)" && $(MAKE) distclean 2>/dev/null || true
+	# Use our config as KCONFIG_ALLCONFIG seed: kconfig keeps our selections
+	# and fills new symbols with defaults.  This handles toys/pending (default n)
+	# correctly because our config explicitly sets CONFIG_MODPROBE=y etc.
+	cd "$(TOYBOX_SRC)" && \
+		KCONFIG_ALLCONFIG="$(CONFIGS)/radxacm5io-toybox.config" $(MAKE) allnoconfig && \
+		$(MAKE) CC=gcc CFLAGS="-static -Os" LDFLAGS="-static --no-pie" -j$$(nproc) toybox && \
+		./toybox modprobe --help >/dev/null && \
+		$(MAKE) PREFIX="$(ROOTFS)/bin" install_flat
+	@echo "==> [radxacm5io] mksh"
+	@if [ ! -f "$(MKSH_SRC)/Build.sh" ]; then curl -fsSL "$(MKSHURL)" | tar xz -C "$(BUILD)"; fi
+	cd "$(MKSH_SRC)" && chmod +x Build.sh && CC="gcc -static" ./Build.sh \
+		&& install -c -s -m 555 mksh "$(ROOTFS)/bin/sh"
+	@echo "==> [radxacm5io] tcc"
+	rm -rf "$(TCC_SRC)" && git clone --depth=1 "$(TCCURL)" "$(TCC_SRC)"
+	cd "$(TCC_SRC)" && ./configure --prefix=/ \
+		--sysincludepaths="$(ROOTFS)/include" --libpaths="$(ROOTFS)/lib" \
+		--tccdir=/lib --crtprefix="$(ROOTFS)/lib" --elfinterp="$(ROOTFS)/lib/libc.so" \
+		--config-static --config-bcheck=no --disable-rpath --config-musl \
+		&& $(MAKE) -j$$(nproc) && $(MAKE) DESTDIR="$(ROOTFS)" install
+	printf '%s\n' '#!/bin/sh' 'tcc -ar "$$@"' > "$(ROOTFS)/bin/ar" && chmod +x "$(ROOTFS)/bin/ar"
+	cd "$(TCC_SRC)" && ./configure --prefix=/ \
+		--sysincludepaths="$(ROOTFS)/include:/include" --libpaths="$(ROOTFS)/lib:/lib" \
+		--crtprefix=/lib --ar="$(ROOTFS)/bin/tcc -ar" --elfinterp=/lib/libc.so \
+		--config-static --config-bcheck=no --disable-rpath --config-musl \
+		&& $(MAKE) clean && $(MAKE) -j$$(nproc) && $(MAKE) DESTDIR="$(ROOTFS)" install
+	mv "$(ROOTFS)/bin/tcc" "$(ROOTFS)/bin/cc"
+	printf '%s\n' '#!/bin/sh' 'cc -ar "$$@"' > "$(ROOTFS)/bin/ar" && chmod +x "$(ROOTFS)/bin/ar"
+	rm -f "$(ROOTFS)/lib/musl-gcc.specs" "$(ROOTFS)/bin/musl-gcc" 2>/dev/null || true
+	@echo "==> [radxacm5io] skeleton + boot files"
+	mkdir -p "$(ROOTFS)/bin" "$(ROOTFS)/etc" "$(ROOTFS)/home/root" \
+		"$(ROOTFS)/dev/pts" "$(ROOTFS)/proc" "$(ROOTFS)/sys" "$(ROOTFS)/tmp" \
+		"$(ROOTFS)/var/run" "$(ROOTFS)/run" "$(ROOTFS)/boot/extlinux" \
+		"$(ROOTFS)/lib/firmware/rtlwifi"
+	cp -a "$(REPO_ROOT)/etc/." "$(ROOTFS)/etc/"
+	cp -f "$(REPO_ROOT)/init" "$(ROOTFS)/bin/init" && chmod +x "$(ROOTFS)/bin/init"
+	@if [ -f "$(ROOTFS)/lib/libc.so" ]; then \
+		ln -sfn libc.so "$(ROOTFS)/lib/ld-musl-aarch64.so.1"; \
+		ln -sfn libc.so "$(ROOTFS)/lib/ld-linux-aarch64.so.1" 2>/dev/null || true; \
+		ln -sf ../lib/libc.so "$(ROOTFS)/bin/ldd" 2>/dev/null || true; \
+		ln -sf ../lib/libc.so "$(ROOTFS)/bin/ld" 2>/dev/null || true; \
+	fi
+	@grep -q '^root:' "$(ROOTFS)/etc/passwd" 2>/dev/null || \
+		echo 'root:x:0:0:root:/home/root:/bin/sh' >> "$(ROOTFS)/etc/passwd"
+	echo "nameserver 1.1.1.1" > "$(ROOTFS)/etc/resolv.conf"
+	echo "lin0-cm5" > "$(ROOTFS)/etc/hostname"
+	@$(MAKE) radxacm5io-bootfiles
+	@# drop stale module trees
+	@if [ -d "$(ROOTFS)/lib/modules" ]; then \
+		newest=""; for d in "$(ROOTFS)/lib/modules"/*; do \
+			[ -f "$$d/modules.dep" ] || continue; \
+			[ -z "$$newest" ] || [ "$$d" -nt "$$newest" ] && newest=$$d; \
+		done; \
+		for d in "$(ROOTFS)/lib/modules"/*; do \
+			[ -d "$$d" ] || continue; [ "$$d" = "$$newest" ] && continue; \
+			rm -rf "$$d"; \
+		done; \
+	fi
+	@test -f "$(ROOTFS)/boot/Image" && test -f "$(ROOTFS)/bin/init"
+	@echo "radxacm5io-rootfs done"
+
+radxacm5io-bootfiles: $(REGDB) ## extlinux + wifi firmware into rootfs/
+	mkdir -p "$(ROOTFS)/boot/extlinux" "$(ROOTFS)/boot/fat-extlinux" "$(ROOTFS)/lib/firmware/rtlwifi" "$(ROOTFS)/bin"
+	@if [ -f "$(REPO_ROOT)/linux-firmware/rtlwifi/rtl8188eufw.bin" ]; then \
+		cp -f "$(REPO_ROOT)/linux-firmware/rtlwifi/rtl8188eufw.bin" \
+			"$(ROOTFS)/lib/firmware/rtlwifi/rtl8188eufw.bin"; \
+	fi
+	printf '%s\n' \
+		'DEFAULT lin0' 'TIMEOUT 10' 'MENU TITLE lin0 CM5 IO' \
+		'LABEL lin0' '	MENU LABEL lin0 root=LABEL=$(RADXA_ROOT_LABEL)' \
+		'	LINUX /boot/Image' '	FDT /boot/$(RADXA_DTB)' \
+		'	APPEND $(RADXA_CMN) root=LABEL=$(RADXA_ROOT_LABEL) rootfstype=ext4' \
+		'LABEL lin0-mmc0' '	MENU LABEL lin0 root=/dev/mmcblk0p3' \
+		'	LINUX /boot/Image' '	FDT /boot/$(RADXA_DTB)' \
+		'	APPEND $(RADXA_CMN) root=/dev/mmcblk0p3 rootfstype=ext4' \
+		> "$(ROOTFS)/boot/extlinux/extlinux.conf"
+	printf '%s\n' \
+		'DEFAULT lin0' 'TIMEOUT 10' 'MENU TITLE lin0 CM5 IO FAT' \
+		'LABEL lin0' '	MENU LABEL lin0' \
+		'	LINUX /Image' '	FDT /$(RADXA_DTB)' \
+		'	APPEND $(RADXA_CMN) root=LABEL=$(RADXA_ROOT_LABEL) rootfstype=ext4' \
+		> "$(ROOTFS)/boot/fat-extlinux/extlinux.conf"
+	printf 'lin0 radxa-cm5-io\n' > "$(ROOTFS)/boot/lin0.id"
+	@if ! grep -q 'HDMI/tty0 console' "$(ROOTFS)/etc/issue" 2>/dev/null; then \
+		printf '\nlin0 on Radxa CM5 IO (HDMI/tty0 console)\n' >> "$(ROOTFS)/etc/issue"; \
+	fi
+
+# Pack hybrid image from existing rootfs (dd head + GPT fix + docker/losetup p3)
+radxacm5io-img:
+	@test -f "$(RADXA_OFFICIAL)" || { echo "missing $(RADXA_OFFICIAL)" >&2; exit 1; }
+	@test -f "$(ROOTFS)/boot/Image" || { echo "missing kernel; run make radxacm5io first" >&2; exit 1; }
+	@test -f "$(ROOTFS)/bin/init" || { echo "missing $(ROOTFS)/bin/init" >&2; exit 1; }
+	@cp -f "$(REPO_ROOT)/init" "$(ROOTFS)/bin/init" && chmod +x "$(ROOTFS)/bin/init"
+	@$(MAKE) radxacm5io-bootfiles
+	@echo "==> hybrid image $(RADXA_IMG) (p3=$(RADXA_P3_MB)MiB @ LBA $(RADXA_P3_LBA))"
+	@mkdir -p "$(BUILD)"
+	@P3_SECTS=$$(($(RADXA_P3_MB)*1024*1024/512)); \
+	HEAD_BYTES=$$(($(RADXA_P3_LBA)*512)); \
+	TOTAL_BYTES=$$((($(RADXA_P3_LBA)+P3_SECTS)*512)); \
+	rm -f "$(RADXA_IMG)"; \
+	dd if="$(RADXA_OFFICIAL)" of="$(RADXA_IMG)" bs=4M \
+		count=$$(((HEAD_BYTES+4194303)/4194304)) status=none; \
+	python3 -c "p=r'$(RADXA_IMG)';h=$$HEAD_BYTES;t=$$TOTAL_BYTES;f=open(p,'r+b');f.truncate(h);f.seek(t-1);f.write(b'\\0');f.close();print('image bytes',t)"; \
+	python3 "$(SCRIPTS)/gpt-resize-p3.py" "$(RADXA_IMG)" "$(RADXA_P3_LBA)" "$$P3_SECTS"; \
+	printf '%s\n' \
+		'#!/bin/bash' 'set -euo pipefail' 'export DEBIAN_FRONTEND=noninteractive' \
+		'apt-get update -qq && apt-get install -y -qq util-linux e2fsprogs rsync >/dev/null' \
+		'IMG=/work/lin0-radxacm5io.img; ROOTFS=/work/rootfs; MNT=/mnt/p3; mkdir -p "$$MNT"' \
+		'OFF=$$((P3_START_LBA*512)); SZ=$$((P3_SECTS*512))' \
+		'LOOP=$$(losetup --find --show -o "$$OFF" --sizelimit "$$SZ" "$$IMG")' \
+		'mkfs.ext4 -F -L "$$ROOT_LABEL" -U "$$ROOT_UUID" "$$LOOP"' \
+		'mount "$$LOOP" "$$MNT"; rsync -aH "$$ROOTFS"/ "$$MNT"/' \
+		'if [ -f "$$MNT/lib/libc.so" ]; then chmod 755 "$$MNT/lib/libc.so"; ln -sfn libc.so "$$MNT/lib/ld-musl-aarch64.so.1"; fi' \
+		'mkdir -p "$$MNT/bin" "$$MNT/boot/extlinux" "$$MNT/proc" "$$MNT/sys" "$$MNT/dev" "$$MNT/tmp" "$$MNT/run"' \
+		'install -m 0755 /work/init "$$MNT/bin/init"' \
+		'install -m 0644 "$$ROOTFS/boot/Image" "$$MNT/boot/Image"' \
+		'install -m 0644 "$$ROOTFS/boot/'"$(RADXA_DTB)"'" "$$MNT/boot/'"$(RADXA_DTB)"'"' \
+		'cat > "$$MNT/boot/extlinux/extlinux.conf" << EOF' \
+		'default emmc' 'timeout 20' 'menu title lin0 CM5 IO' \
+		'label emmc' '  menu label root=/dev/mmcblk0p3' \
+		'  linux /boot/Image' '  fdt /boot/'"$(RADXA_DTB)" \
+		'  append root=/dev/mmcblk0p3 '"$(RADXA_CMN)"' rootfstype=ext4' \
+		'label bylabel' '  menu label root=LABEL='"$(RADXA_ROOT_LABEL)" \
+		'  linux /boot/Image' '  fdt /boot/'"$(RADXA_DTB)" \
+		'  append root=LABEL='"$(RADXA_ROOT_LABEL)"' '"$(RADXA_CMN)"' rootfstype=ext4' \
+		'EOF' \
+		'sync; umount "$$MNT"; losetup -d "$$LOOP"; echo p3 done' \
+		> "$(BUILD)/radxa-p3.sh"; \
+	docker run --rm --privileged \
+		-e P3_START_LBA="$(RADXA_P3_LBA)" -e P3_SECTS="$$P3_SECTS" \
+		-e ROOT_UUID="$(RADXA_ROOT_UUID)" -e ROOT_LABEL="$(RADXA_ROOT_LABEL)" \
+		-v "$(REPO_ROOT):/work" debian:bookworm-slim \
+		bash /work/build/radxa-p3.sh
+	@ls -lh "$(RADXA_IMG)"
+	@echo "Flash: rkdeveloptool wl 0 lin0-radxacm5io.img"
 
 # --- meta -------------------------------------------------------------------
 
@@ -291,23 +542,19 @@ rpizero-img: rootfs-rpizero.tar.xz
 all: $(PLATFORM)
 
 help:
-	@echo "lin0 — each platform is a Make target; deps are real files."
+	@echo "lin0 — Make targets (real file deps where possible)."
 	@echo ""
-	@echo "  make <platform>   one of: $(PLATFORMS)"
-	@echo "  make              host arch ($(HOST_ARCH))"
+	@echo "  make <platform>     one of: $(PLATFORMS)"
+	@echo "  make radxacm5io     Radxa CM5 IO hybrid image (Docker on macOS)"
+	@echo "  make radxacm5io-img re-pack image from existing rootfs/"
 	@echo "  make list | clean | distclean"
 	@echo ""
-	@echo "Tracked outputs include:"
-	@echo "  $(MUSL_GCC), $(TOYBOX_BIN), $(HOST_CC), $(ROOT_INIT)"
-	@echo "  $(BUILD)/<platform>/linux.ok, $(BUILD)/<platform>/post.ok"
-	@echo "  rootfs-<platform>.tar.xz"
-	@echo ""
-	@echo "Edit configs/<platform>-{linux,toybox}.config or init/etc -> rebuild deps."
+	@echo "Radxa env: RADXA_LINUXVER=$(RADXA_LINUXVER)  RADXA_P3_MB=$(RADXA_P3_MB)"
+	@echo "Edit configs/radxacm5io-* , init, etc/ — then rebuild."
 
 list:
 	@echo "Platforms: $(PLATFORMS)"
-	@echo "Aliases: arm64->aarch64; radxa|radxa-cm5|cm5io->radxacm5io;"
-	@echo "         rpi-zero|rpi0|zerow->rpizero;  make rpizero-img -> lin0-rpizero.img"
+	@echo "Aliases: arm64->aarch64; radxa|cm5io->radxacm5io; rpi-zero->rpizero"
 
 umount-rootfs:
 	@sudo $(SCRIPTS)/umounts.sh 2>/dev/null || true

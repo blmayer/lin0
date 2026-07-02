@@ -3,7 +3,7 @@
 #
 # Layout (classic RPi):
 #   p1  FAT32  ~64 MiB   /boot (firmware + kernel.img + DTB + config.txt)
-#   p2  ext4   rest      lin0 rootfs (init=/sbin/init)
+#   p2  ext4   rest      lin0 rootfs (init=/bin/init)
 #
 # Usage (from repo root, after make rpizero):
 #   ./scripts/mkimg-rpizero.sh

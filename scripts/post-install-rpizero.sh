@@ -59,7 +59,7 @@ gpu_mem=16
 EOF
 
 cat > "$BOOT/cmdline.txt" << EOF
-console=serial0,115200 console=tty1 root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw init=/sbin/init
+console=serial0,115200 console=tty1 root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw init=/bin/init
 EOF
 
 # --- WiFi firmware for Zero W (brcmfmac43430) ---

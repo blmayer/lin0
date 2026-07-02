@@ -22,7 +22,7 @@ CONFIG_OF_ADDRESS=y
 CONFIG_OF_IRQ=y
 CONFIG_OF_OVERLAY=y
 # Real root= comes from extlinux (root=LABEL=lin0root); this is only a fallback
-# HDMI/fbcon only
+# Console: HDMI VT/fbcon only (no serial / earlycon)
 CONFIG_CMDLINE="console=tty0 root=LABEL=lin0root rootfstype=ext4 rootwait rw"
 CONFIG_CMDLINE_FROM_BOOTLOADER=y
 CONFIG_CMDLINE_FORCE=n
@@ -52,13 +52,19 @@ CONFIG_POSIX_MQUEUE=y
 CONFIG_KALLSYMS=y
 CONFIG_SYSCTL=y
 CONFIG_PROC_SYSCTL=y
-# Loadable modules (e.g. hid_apple for Apple USB/BT keyboards)
+# Loadable modules (hid_apple, Realtek PHY/USB eth, …)
 CONFIG_MODULES=y
 CONFIG_MODULE_UNLOAD=y
 CONFIG_MODVERSIONS=y
+# Userspace modprobe lives at /bin/modprobe (toybox); default /sbin/modprobe is wrong here
+CONFIG_MODPROBE_PATH="/bin/modprobe"
+# Keep tunnel helpers built-in (avoid the only =m leftovers from olddefconfig)
+CONFIG_NET_IP_TUNNEL=y
+CONFIG_INET_TUNNEL=y
+CONFIG_IPV6_SIT=y
 
-# --- Executable formats (required for /sbin/init #!/bin/sh and /bin/sh ELF) ---
-# Without these, kernel reports: Failed to execute /sbin/init (error -8 / ENOEXEC)
+# --- Executable formats (required for /bin/init #!/bin/sh and /bin/sh ELF) ---
+# Without these, kernel reports: Failed to execute /bin/init (error -8 / ENOEXEC)
 CONFIG_BINFMT_ELF=y
 CONFIG_BINFMT_SCRIPT=y
 
@@ -162,21 +168,21 @@ CONFIG_VT_CONSOLE=y
 CONFIG_VT_CONSOLE_SLEEP=y
 CONFIG_VT_HW_CONSOLE_BINDING=y
 CONFIG_HW_CONSOLE=y
-# Serial (RK3588 uart2 = ttyS2) + earlycon
+# UART hardware only (no kernel serial console — HDMI fbcon is the sole console)
 CONFIG_SERIAL_CORE=y
-CONFIG_SERIAL_CORE_CONSOLE=y
+# CONFIG_SERIAL_CORE_CONSOLE is not set
 CONFIG_SERIAL_8250=y
 CONFIG_SERIAL_8250_DEPRECATED_OPTIONS=y
 CONFIG_SERIAL_8250_16550A_VARIANTS=y
-CONFIG_SERIAL_8250_CONSOLE=y
+# CONFIG_SERIAL_8250_CONSOLE is not set
 CONFIG_SERIAL_8250_DMA=y
 CONFIG_SERIAL_8250_DW=y
 CONFIG_SERIAL_8250_NR_UARTS=16
 CONFIG_SERIAL_8250_RUNTIME_UARTS=16
 CONFIG_SERIAL_OF_PLATFORM=y
-CONFIG_SERIAL_EARLYCON=y
-CONFIG_SERIAL_EARLYCON_SEMIHOST=y
-# Framebuffer console on DRM (tty0 when HDMI works)
+# CONFIG_SERIAL_EARLYCON is not set
+# CONFIG_SERIAL_EARLYCON_SEMIHOST is not set
+# Framebuffer console on DRM (tty0 / HDMI only)
 CONFIG_FB=y
 CONFIG_FRAMEBUFFER_CONSOLE=y
 CONFIG_FRAMEBUFFER_CONSOLE_DETECT_PRIMARY=y
@@ -211,8 +217,8 @@ CONFIG_HIDRAW=y
 CONFIG_UHID=y
 CONFIG_USB_HID=y
 CONFIG_USB_HIDDEV=y
-# Apple keyboards / Magic Keyboard over USB
-CONFIG_HID_APPLE=y
+# Apple keyboards / Magic Keyboard over USB (module — load with modprobe hid_apple)
+CONFIG_HID_APPLE=m
 # CONFIG_HID_APPLEIR is not set
 # Common USB HID keyboards (hubs / non-Apple brands)
 CONFIG_HID_A4TECH=y
@@ -232,7 +238,7 @@ CONFIG_DEVMEM=y
 # CONFIG_DEVKMEM is not set
 CONFIG_NULL_TTY=y
 CONFIG_HANGCHECK_TIMER=y
-# Magic SysRq on VT/serial (debug when console is up)
+# Magic SysRq on VT/HDMI console
 CONFIG_MAGIC_SYSRQ=y
 CONFIG_MAGIC_SYSRQ_DEFAULT_ENABLE=0x1
 
@@ -389,7 +395,8 @@ CONFIG_STMMAC_PLATFORM=y
 CONFIG_DWMAC_ROCKCHIP=y
 CONFIG_PHYLIB=y
 CONFIG_FIXED_PHY=y
-CONFIG_REALTEK_PHY=y
+# Realtek PHYs as modules: RTL821x / RTL8221 / RTL8226 / RTL8228 (2.5G) family
+CONFIG_REALTEK_PHY=m
 CONFIG_MOTORCOMM_PHY=y
 CONFIG_ROCKCHIP_PHY=y
 CONFIG_MDIO_DEVICE=y
@@ -397,6 +404,11 @@ CONFIG_MDIO_BUS=y
 CONFIG_MDIO_BUS_MUX=y
 CONFIG_MDIO_BUS_MUX_GPIO=y
 CONFIG_MDIO_BUS_MUX_MMIOREG=y
+# USB Realtek ethernet dongles (RTL8150 / RTL8152 / RTL8153 / RTL8156 — similar family)
+CONFIG_USB_NET_DRIVERS=y
+CONFIG_MII=y
+CONFIG_USB_RTL8150=m
+CONFIG_USB_RTL8152=m
 
 # --- USB host (re-assert HID so USB+keyboard stay on after USB deps resolve) ---
 CONFIG_USB_SUPPORT=y
@@ -421,7 +433,7 @@ CONFIG_HID=y
 CONFIG_HID_GENERIC=y
 CONFIG_USB_HID=y
 CONFIG_USB_HIDDEV=y
-CONFIG_HID_APPLE=y
+CONFIG_HID_APPLE=m
 CONFIG_INPUT=y
 CONFIG_INPUT_EVDEV=y
 CONFIG_INPUT_KEYBOARD=y
@@ -441,10 +453,71 @@ CONFIG_LEDS_TRIGGER_DEFAULT_ON=y
 CONFIG_LEDS_TRIGGER_TIMER=y
 CONFIG_LEDS_TRIGGER_NETDEV=y
 
+# --- WLAN: Realtek RTL8188EU USB only (mainline rtl8xxxu) ---
+# Firmware: /lib/firmware/rtlwifi/rtl8188eufw.bin (installed by post-install)
+CONFIG_WIRELESS=y
+CONFIG_CFG80211=m
+CONFIG_CFG80211_DEFAULT_PS=y
+CONFIG_CFG80211_CERTIFICATION_ONUS=y
+# CONFIG_CFG80211_REQUIRE_SIGNED_REGDB is not set
+CONFIG_MAC80211=m
+CONFIG_MAC80211_RC_MINSTREL=y
+CONFIG_MAC80211_LEDS=y
+CONFIG_RFKILL=m
+CONFIG_WLAN=y
+# All other Wi‑Fi vendors off
+# CONFIG_WLAN_VENDOR_ADMTEK is not set
+# CONFIG_WLAN_VENDOR_ATH is not set
+# CONFIG_WLAN_VENDOR_ATMEL is not set
+# CONFIG_WLAN_VENDOR_BROADCOM is not set
+# CONFIG_WLAN_VENDOR_INTEL is not set
+# CONFIG_WLAN_VENDOR_INTERSIL is not set
+# CONFIG_WLAN_VENDOR_MARVELL is not set
+# CONFIG_WLAN_VENDOR_MEDIATEK is not set
+# CONFIG_WLAN_VENDOR_MICROCHIP is not set
+# CONFIG_WLAN_VENDOR_PURELIFI is not set
+# CONFIG_WLAN_VENDOR_QUANTENNA is not set
+# CONFIG_WLAN_VENDOR_RALINK is not set
+# CONFIG_WLAN_VENDOR_RSI is not set
+# CONFIG_WLAN_VENDOR_SILABS is not set
+# CONFIG_WLAN_VENDOR_ST is not set
+# CONFIG_WLAN_VENDOR_TI is not set
+# CONFIG_WLAN_VENDOR_ZYDAS is not set
+# Realtek: only rtl8xxxu (8188EU family) — not rtlwifi / rtw88 / rtw89 / rtl818x
+CONFIG_WLAN_VENDOR_REALTEK=y
+# CONFIG_RTL8180 is not set
+# CONFIG_RTL8187 is not set
+# CONFIG_RTL_CARDS is not set
+# CONFIG_RTL8192CE is not set
+# CONFIG_RTL8192SE is not set
+# CONFIG_RTL8192DE is not set
+# CONFIG_RTL8723AE is not set
+# CONFIG_RTL8723BE is not set
+# CONFIG_RTL8188EE is not set
+# CONFIG_RTL8192EE is not set
+# CONFIG_RTL8821AE is not set
+# CONFIG_RTL8192CU is not set
+# CONFIG_RTL8192DU is not set
+# CONFIG_RTW88 is not set
+# CONFIG_RTW89 is not set
+CONFIG_RTL8XXXU=m
+# Extra USB IDs (helps clone 8188EU sticks)
+CONFIG_RTL8XXXU_UNTESTED=y
+# WPA crypto used by mac80211 (keep built-in so modular wifi just works)
+CONFIG_CRYPTO_AES=y
+CONFIG_CRYPTO_CCM=y
+CONFIG_CRYPTO_GCM=y
+CONFIG_CRYPTO_CMAC=y
+CONFIG_CRYPTO_GHASH=y
+CONFIG_CRYPTO_CTR=y
+CONFIG_CRYPTO_SEQIV=y
+CONFIG_CRYPTO_NULL=y
+CONFIG_CRYPTO_HASH=y
+CONFIG_KEYS=y
+
 # --- Explicitly off (still not full vendor defconfig) ---
 # CONFIG_PCI is not set
 # CONFIG_SOUND is not set
-# CONFIG_WLAN is not set
 # CONFIG_BT is not set
 # CONFIG_MEDIA_SUPPORT is not set
 # CONFIG_DRM_PANFROST is not set

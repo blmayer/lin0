@@ -30,5 +30,17 @@ make ARCH=arm64 allnoconfig
 scripts/kconfig/merge_config.sh -m .config "$FRAGMENT"
 # Resolve dependencies / drop unknown symbols for this kernel version
 make ARCH=arm64 olddefconfig
+# Force fragment overrides that olddefconfig reverts (bool with default y)
+while IFS= read -r line; do
+	case "$line" in
+		"# CONFIG_"*" is not set")
+			sym="${line#\# }"
+			sym="${sym% is not set}"
+			if grep -q "^${sym}=y" .config; then
+				sed -i "s/^${sym}=y/# ${sym} is not set/" .config
+			fi
+			;;
+	esac
+done < "$FRAGMENT"
 cp .config "$OUT"
 echo "wrote $OUT ($(wc -l < "$OUT") lines, $(grep -c '=y$' .config || true) =y symbols)"

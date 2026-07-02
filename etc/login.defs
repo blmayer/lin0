@@ -158,7 +158,7 @@ ENV_HZ		HZ=100
 # *REQUIRED*  The default PATH settings, for superuser and normal users.
 #
 # (they are minimal, add the rest in the shell startup files)
-ENV_SUPATH	PATH=/sbin:/bin
+ENV_SUPATH	PATH=/bin
 ENV_PATH	PATH=/bin
 
 #

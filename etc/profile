@@ -1,4 +1,4 @@
-export PATH="/bin:/sbin"
+export PATH="/bin"
 
 if [ "$PS1" ]; then
 	if [ "`id -u`" -eq 0 ]; then
