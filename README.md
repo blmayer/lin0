@@ -121,7 +121,7 @@ Supported architectures match the tarballs.
 
 ### Radxa CM5 + IO shield (mainline)
 
-Builds a complete bootable **disk image** (mainline kernel on `torvalds/linux` master for `rk3588s-radxa-cm5-io.dts`; stock Radxa U-Boot from the official image). Docker is used automatically on macOS for the arm64 kernel compile and privileged disk image packing:
+Builds a complete bootable **disk image** (mainline kernel on `torvalds/linux` master for `rk3588s-radxa-cm5-io.dts`; stock Radxa U-Boot from the official image). On macOS, `make` spins up an inline Debian arm64 builder image for the kernel/rootfs compile, then pipes an inline pack script into a privileged container (no extra Dockerfile or `radxa-p3.sh`):
 
 ```sh
 git clone https://terminal.pink/lin0
@@ -244,13 +244,25 @@ lin0 provides a minimal base system — to make it usable, you'll need to do a f
 
 #### 1. Set up networking (DNS)
 
-Create a simple `/etc/resolv.conf`:
+Default DNS is shipped in `etc/resolv.conf` (copied into the image). Edit that
+file in the repo for build-time defaults, or override on the running system:
 
 ```sh
-echo "nameserver 1.1.1.1" > /etc/resolv.conf
+vi /etc/resolv.conf
 ```
 
-Replace 1.1.1.1 with your preferred DNS server if needed.
+TLS trust anchors are **not** under `etc/`: `make` downloads Mozilla’s CA bundle
+from [curl.se/ca/cacert.pem](https://curl.se/ca/cacert.pem) (SHA-256 pinned as
+`CACERT_SHA256` in the Makefile) into `rootfs/etc/ssl/cert.pem` and
+`rootfs/etc/ssl/certs/ca-certificates.crt`. On every board, `toybox`/`wget` is
+dynamically linked against **BearSSL** + **libtls-bearssl**
+(`rootfs/lib/libbearssl.so*`, `rootfs/lib/libtls.so*`) plus musl `libc.so`;
+libtls loads that CA bundle by default (`/etc/ssl/cert.pem`). Bump the hash when
+refreshing the bundle.
+
+
+All other static system config belongs in `etc/` (generic only — no per-platform
+copies).
 
 
 #### 2. Add users

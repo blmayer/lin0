@@ -1,0 +1,8 @@
+Hi kernel team.
+
+I was testing building the kernel for my radxa cm5+io shield, and turns
+out there is no rtc in the DTS, so i got it from the radxa files.
+This is my first email to you, please help me correct it if something is
+off the standards.
+
+Best, Brian

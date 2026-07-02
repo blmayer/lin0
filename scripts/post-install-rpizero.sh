@@ -86,9 +86,6 @@ if [ -d "$FW_SRC/brcm" ]; then
 	cp -f "$FW_SRC/brcm/LICENSE.broadcom_bcm43xx" "$ROOTFS/lib/firmware/brcm/" 2>/dev/null || true
 fi
 
-# hostname for this board
-echo rpizero > "$ROOTFS/etc/hostname" 2>/dev/null || true
-
 echo "rpizero post-install: boot files in $BOOT (kernel.img, $DTB, config.txt, cmdline.txt)"
 echo "  flash: partition SD (p1 FAT boot, p2 ext4 root), copy $BOOT/* to p1, rootfs to p2"
 echo "  or: make rpizero-img  (if mkimg-rpizero.sh present)"
