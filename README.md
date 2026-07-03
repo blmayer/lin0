@@ -1,127 +1,109 @@
 # lin0
 
 [![License: BSD-2-Clause](https://img.shields.io/badge/license-BSD--2--Clause-blue.svg)](https://opensource.org/licenses/BSD-2-Clause)
-[![Latest Release](https://img.shields.io/badge/release-v0.0.2-orange.svg)](#release-notes)
+[![Rolling release](https://img.shields.io/badge/release-rolling-orange.svg)](#roadmap)
 [![Docker Pulls](https://img.shields.io/docker/pulls/bleemayer/lin0)](https://hub.docker.com/r/bleemayer/lin0)
-![Build Status](https://img.shields.io/badge/build-manual-lightgrey)
 
 ```
              _._
-           e/` '\,.eo-__.     lin0 (linux zero) is a
-          '/.' .|_/e--. '\e   super minimal source
-    ,;-o-.'|`  //e    e\ |`   based linux meta
-  ./' ,e0\o   //-o.__. ,. \'  distribution, aimed
- ./` /' -/e   e\o_/___.  \|'  at power users or
- e|`/`,o-o\  /v-/e_.  '\. \.  minimalism enthusiasts
+           e/` '\,.eo-__.        lin0 (linux zero) is a
+          '/.' .|_/e--. '\e      super minimal source
+    ,;-o-.'|`  //e    e\ |`      based linux meta
+  ./' ,e0\o   //-o.__. ,. \'     distribution, aimed
+ ./` /' -/e   e\o_/___.  \|'     at power users or
+ e|`/`,o-o\  /v-/e_.  '\. \.     minimalism enthusiasts
 '/  ._e._, \ //    \`  \e |'
-'|'"/     \.V |    `|' `|'|`  it was born from
-`|e`|'    | # /    `|.  |`|`  exercises in how
-e|` `    /\- ,\    e|'  '\`   minimal a linux system
- '`    _/  / / \     `  `|'   can get.
+'|'"/     \.V |    `|' `|'|`     it was born from
+`|e`|'    | # /    `|.  |`|`     exercises in how
+e|` `    /\- ,\    e|'  '\`      minimal a linux system
+ '`    _/  / / \     `  `|'      can get.
    .,wW'^^^//;^-^;^;w_
 ```
 
-
-## What is lin0?
-
-**lin0 (linux zero)** is a **super minimal source-based Linux meta-distribution**, aimed at power users or minimalism enthusiasts. It was born from exercises in seeing just how minimal a Linux system can get.
-
-
-### Features
-
-The distro features a barebones system built from scratch:
+## Features
 
 - Linux kernel (no initrd)
 - `musl` libc
-- `mksh` (Myr Korn Shell)
+- `mksh` (MirBSD Korn Shell)
 - `tcc` (Tiny C Compiler)
 - `toybox`
-- Simple shell-script-based init system
+- Shell-script init (`init`)
 
----
+## Quick start
 
+```sh
+git clone https://terminal.pink/lin0
+cd lin0
+make help          # list platforms
+make               # build for the host architecture
+```
 
-## 📝 Release Notes
+Each platform is a Make target. Outputs are `rootfs-<platform>.tar.xz`
+(and a full disk image for some boards).
 
-**v0.0.2**
-- Improved compiler toolchain
+```sh
+make x86_64
+make pinebookpro
+make rpizero       # also: make rpizero-img
+make radxacm5io    # rootfs tarball + hybrid disk image
+```
 
-**v0.0.1**
-- Initial release
+Edit `configs/<platform>-*.config`, `etc/*`, or `init`, then rebuild — Make
+only rebuilds what changed.
 
----
+## Images
 
+### Rootfs tarballs
 
-## 🛣️ Roadmap
+Architecture-only (no kernel):
 
-### Current Work
+| Artifact | Notes |
+| --- | --- |
+| [`rootfs-x86_64.tar.xz`](./rootfs-x86_64.tar.xz) | ~3.3 MB |
+| [`rootfs-arm64.tar.xz`](./rootfs-arm64.tar.xz) | ~3.0 MB |
 
-- ~~~Support RPi Compute Module 5~~~
-- ~~~Support Radxa CM5 + IO shield (mainline kernel)~~~
-- Adjust kernel build:
-  - Build HP EliteDesk with firmware built-in
+Platform images (include kernel where applicable):
 
-
-### Planned Features
-
-- Make system compile itself
-- Improve RPi 3B+ rootfs
-- Support mod loading and daemons in init script
-- Improve issue file or add a login program like `ly`
-- Create man pages
-- ~~~Support RPi Zero W~~~ (`make rpizero` / `make rpizero-img`)
-- Add lin0 to `fetch` et al. commands
-
----
-
-
-## 📦 Images
-
-We provide system images in multiple formats so you can get started without building everything from scratch.
-
-
-### Tarballs (.tar.xz)
-
-These are **architecture-targeted rootfs tarballs** (no kernel):
-
-- [`x86_64`](./rootfs-x86_64.tar.xz) (3.3 MB)
-- [`arm64`](./rootfs-arm64.tar.xz) (3.0 MB)
-
-
-And these are Platform-specific and it includes the kernel:
-
-- [`HP EliteDesk 800 G1`](./rootfs-hpelitedesk.tar.xz) (13 MB)
-- [`Pinebook Pro`](./rootfs-pinebookpro.tar.xz) (13 MB)
-- [`Raspberry Pi 3B+`](./rootfs-rpi3b+.tar.xz) (26 MB)
-- Raspberry Pi Zero / Zero W — build: `make rpizero` → `rootfs-rpizero.tar.xz`; SD image: `make rpizero-img` → `lin0-rpizero.img`
-- [`Raspberry Pi CM5 + io board`](./rootfs-rpi-cm5io.tar.xz) (32 MB)
-- [`Radxa CM5 + IO shield`](./rootfs-radxacm5io.tar.xz) (mainline kernel; build via `make radxacm5io`)
-
-Bootable disk image (kernel + U-Boot + rootfs) — **eMMC** (preferred) or SD:
-
-- [`lin0-radxacm5io.img`](./lin0-radxacm5io.img) — full GPT image incl. SPL/U-Boot @ sector 64
-- eMMC via Maskrom: `rkdeveloptool wl 0 lin0-radxacm5io.img`
-
+| Platform | Artifact | Build |
+| --- | --- | --- |
+| HP EliteDesk 800 G1 | [`rootfs-hpelitedesk.tar.xz`](./rootfs-hpelitedesk.tar.xz) | `make hpelitedesk` |
+| Pinebook Pro | [`rootfs-pinebookpro.tar.xz`](./rootfs-pinebookpro.tar.xz) | `make pinebookpro` |
+| Raspberry Pi 3B+ | [`rootfs-rpi3b+.tar.xz`](./rootfs-rpi3b+.tar.xz) | `make rpi3bplus` |
+| Raspberry Pi Zero / Zero W | `rootfs-rpizero.tar.xz`, `lin0-rpizero.img` | `make rpizero` / `make rpizero-img` |
+| Raspberry Pi CM5 + IO | [`rootfs-rpi-cm5io.tar.xz`](./rootfs-rpi-cm5io.tar.xz) | `make rpi-cm5io` |
+| Radxa CM5 + IO | `rootfs-radxacm5io.tar.xz`, `lin0-radxacm5io.img` | `make radxacm5io` |
 
 ### Docker
 
-We also provide Docker images for quick testing or compiling with musl and tcc:
-
-👉 [`bleemayer/lin0` on Docker Hub](https://hub.docker.com/r/bleemayer/lin0)
+Prebuilt images for trying the userland or compiling with musl/`tcc`:
 
 ```sh
 docker pull bleemayer/lin0:latest
 ```
 
-Supported architectures match the tarballs.
+See [`bleemayer/lin0`](https://hub.docker.com/r/bleemayer/lin0) on Docker Hub.
+Architectures match the tarballs above.
 
+## Install from a tarball
 
-## 🧰 Installation
+```sh
+tar -xf rootfs-ARCH.tar.xz -C /mnt/your-root
+cp path/to/kernel /mnt/your-root/boot/   # if the tarball has no kernel
+```
 
+Replace `ARCH` with `x86_64`, `arm64`, or a platform name. Kernel name is
+platform-specific (`bzImage`, `Image`, `zImage`, …).
 
-### Radxa CM5 + IO shield (mainline)
+Files under `pkg/` are copied to `/home/root/` on the target when present.
 
-Builds a complete bootable **disk image** (mainline kernel on `torvalds/linux` master for `rk3588s-radxa-cm5-io.dts`; stock Radxa U-Boot from the official image). On macOS, `make` spins up an inline Debian arm64 builder image for the kernel/rootfs compile, then pipes an inline pack script into a privileged container (no extra Dockerfile or `radxa-p3.sh`):
+## Radxa CM5 + IO (mainline)
+
+`make radxacm5io` builds a **hybrid** bootable disk image: SPL/U-Boot and the
+GPT layout come from the official Radxa Debian image; partition 3 is resized
+and filled with lin0 (mainline kernel + `rk3588s-radxa-cm5-io.dtb`).
+
+On macOS, Make runs the arm64 compile and the privileged partition formatting
+inside Docker automatically.
 
 ```sh
 git clone https://terminal.pink/lin0
@@ -129,187 +111,120 @@ cd lin0
 make radxacm5io
 ```
 
-Outputs:
+| Output | Purpose |
+| --- | --- |
+| `lin0-radxacm5io.img` | Full GPT image (loader at sector 64, ext4 root on partition 3) |
+| `rootfs-radxacm5io.tar.xz` | Root filesystem (kernel + DTB under `/boot`) |
+| `build/rk3588_spl_loader*.bin` | Maskrom stage-1 loader for `rkdeveloptool db` |
 
-| File | Purpose |
-|------|---------|
-| `lin0-radxacm5io.img` | Full disk image (loader @ sector 64, FAT boot, ext4 root) — flash to **eMMC** or SD |
-| `rootfs-radxacm5io.tar.xz` | Root filesystem tarball (includes kernel + DTB under `/boot`) |
-| `build/rk3588_spl_loader*.bin` | Maskrom/USB stage-1 loader for `rkdeveloptool db` |
+### Flash to eMMC (recommended)
 
-**Install to eMMC (recommended, no SD)** — wipes existing Debian; writes SPL/U-Boot + lin0 in one image:
+Puts the board in Maskrom mode (hold recovery, power on), then:
 
 ```sh
-# put the board in Maskrom mode (hold recovery button + power on)
 rkdeveloptool ld
 rkdeveloptool wl 0 lin0-radxacm5io.img
 rkdeveloptool rd
 ```
 
-Optional SD path (**whole disk**, not a partition):
+This overwrites the existing Debian install.
+
+### Flash to SD (whole disk)
 
 ```sh
 # Linux
 sudo dd if=lin0-radxacm5io.img of=/dev/sdX bs=4M status=progress conv=fsync
 
-# macOS (find disk with `diskutil list`, e.g. /dev/disk4)
+# macOS — use diskutil list; example disk4
 diskutil unmountDisk /dev/disk4
 sudo dd if=lin0-radxacm5io.img of=/dev/rdisk4 bs=4m
 ```
 
-Power on the **Radxa CM5 IO** (12 V recommended); no SD required if eMMC was flashed.
+Power the **Radxa CM5 IO** with 12 V. Console is HDMI (`tty0`) with a USB
+keyboard.
 
-- **Console**: HDMI (`tty0`), USB keyboard
-- **Login**: `root` (no password)
-- **DTB**: `rk3588s-radxa-cm5-io.dtb` (mainline `torvalds/linux` master)
-- **Kernel**: mainline only (no vendor/rk-linux tree)
-
-Optional overrides:
+Optional knobs:
 
 ```sh
-# pin a specific kernel version or stay on master:
 make radxacm5io RADXA_LINUXVER=master RADXA_P3_MB=128
 ```
 
-**Bootloader notes:** The hybrid image reuses U-Boot from the official Radxa Debian image (`OFFICIAL_IMG` / `RADXA_OFFICIAL`). The kernel is mainline `torvalds/linux`; the DTB is `rk3588s-radxa-cm5-io.dtb`.
+U-Boot offers two root choices: `root=/dev/mmcblk0p3` (eMMC partition 3) and
+`root=LABEL=lin0root`. Pick one from the boot menu if the default does not
+find the rootfs.
 
-The extlinux config has two labels: `root=/dev/mmcblk0p3` (eMMC) and `root=LABEL=lin0root` (auto-detect). Select at the U-Boot menu if needed.
+## Build from source
 
+1. Add or edit kernel/toybox configs:
 
-### From Source
+   ```text
+   configs/MODEL-linux.config
+   configs/MODEL-toybox.config
+   ```
 
-Clone this repo:
+2. Build:
 
-```sh
-git clone https://terminal.pink/lin0
-```
+   ```sh
+   make help
+   make x86_64
+   make pinebookpro
+   make radxacm5io
+   make              # host architecture
+   ```
 
-Then follow these steps:
+3. Install the resulting `rootfs-*.tar.xz` (or disk image) on the target.
 
-1. Copy your kernel config file to:
-    ```sh
-    configs/MODEL-linux.config
-    ```
+Static system config lives in `etc/` (generic only). TLS trust anchors are
+fetched at build time from [curl.se/ca/cacert.pem](https://curl.se/ca/cacert.pem)
+into `rootfs/etc/ssl/` (SHA-256 pinned as `CACERT_SHA256` in the Makefile).
+`wget` links against BearSSL + libtls-bearssl and loads `/etc/ssl/cert.pem` by
+default.
 
-2. Build the root filesystem with Make (each platform is a target; deps are normal files so Make does incremental rebuilds):
-    ```sh
-    make help              # list targets
-    make x86_64            # build rootfs-x86_64.tar.xz
-    make pinebookpro       # build rootfs-pinebookpro.tar.xz
-    make radxacm5io        # Docker hybrid image (Radxa CM5+IO)
-    make                   # build for host arch
-    ```
-    Changing `configs/<platform>-*.config`, `init`, or an installed artifact under `rootfs/` causes Make to rebuild only what is out of date.
+## Usage
 
+- **Username:** `root`
+- **Password:** `lin0`
 
-3. Copy the generated rootfs to your target system.
+There is no systemd — init is a shell script. Expect to configure the rest
+yourself.
 
-Extra packages in the `pkg/` folder will be copied to `/home/root/` on the target.
+### Networking
 
-
-### From Tarball
-
-If you downloaded one of the tarballs, you can install lin0 as follows:
-
-1. Extract the root filesystem to your destination partition:
-    ```sh
-    tar -xf rootfs-ARCH.tar.xz -C /mnt/your-root
-    ```
-    Replace `ARCH` with the appropriate architecture (e.g., x86_64, arm64).
-
-2. Copy your kernel to the boot folder:
-    ```sh
-    cp path/to/your/kernel /mnt/your-root/boot/
-    ```
-    (This could be a bzImage, Image, or zImage, depending on your platform.)
-
-
-## 🚀 Usage
-
-After successfully booting lin0, you'll be greeted with a login prompt.
-
-
-### Default login
-
-- **Username**: `root`
-- **Password**: `lin0`
-
----
-
-
-### Post-install setup
-
-lin0 provides a minimal base system — to make it usable, you'll need to do a few things manually:
-
-
-#### 1. Set up networking (DNS)
-
-Default DNS is shipped in `etc/resolv.conf` (copied into the image). Edit that
-file in the repo for build-time defaults, or override on the running system:
+Default DNS ships in `etc/resolv.conf`. On a running system:
 
 ```sh
 vi /etc/resolv.conf
 ```
 
-TLS trust anchors are **not** under `etc/`: `make` downloads Mozilla’s CA bundle
-from [curl.se/ca/cacert.pem](https://curl.se/ca/cacert.pem) (SHA-256 pinned as
-`CACERT_SHA256` in the Makefile) into `rootfs/etc/ssl/cert.pem` and
-`rootfs/etc/ssl/certs/ca-certificates.crt`. On every board, `toybox`/`wget` is
-dynamically linked against **BearSSL** + **libtls-bearssl**
-(`rootfs/lib/libbearssl.so*`, `rootfs/lib/libtls.so*`) plus musl `libc.so`;
-libtls loads that CA bundle by default (`/etc/ssl/cert.pem`). Bump the hash when
-refreshing the bundle.
-
-
-All other static system config belongs in `etc/` (generic only — no per-platform
-copies).
-
-
-#### 2. Add users
-
-You can add users manually (note: toybox may provide a limited adduser):
+### Users
 
 ```sh
 adduser myuser
 passwd myuser
 ```
 
-But I recommend editing the shells file and creating the home folder.
+Or edit `etc/passwd` / `etc/shells` in the tree and create the home directory
+before rebuilding. Lock down root with `passwd` after first boot.
 
+### Extra software
 
-#### 3. Secure your root account
+Install what you need on the target (for example `wpa_supplicant` for Wi-Fi).
+lin0 is a starting point, not a full desktop stack.
 
-```sh
-passwd
-```
+## Roadmap
 
+- Ship HP EliteDesk with firmware built into the kernel
+- Make the system able to compile itself
+- Improve the Raspberry Pi 3B+ rootfs
+- Load modules and start daemons from `init`
+- Better login/issue screen (something like `ly`)
+- Man pages
+- Add lin0 to `fetch` and similar tools
 
-#### 4. Install needed tools
+## Help
 
-Install extra software as required — for example, to connect to Wi-Fi install wpa_supplicant and its dependencies.
+Mailing list: `lin0 AT terminal DOT pink`
 
+## License
 
-
-### Notes
-
-lin0 does not come with systemd or other init frameworks — it uses a basic shell script–based init.
-
-You are expected to customize your system configuration.
-
-Think of lin0 as a starting point: it's minimal by design.
-
-Welcome to lin0 — now you build the rest.
-
-
-## 🙋 Help
-
-Email the mailing list:  
-`lin0 AT terminal DOT pink`
-
-Wiki coming soon.
-
-
-## 📜 License
-
-This project is licensed under the BSD 2-Clause License.
-(C) 2023-2025 Brian Mayer
+BSD 2-Clause. © 2023–2026 Brian Mayer
