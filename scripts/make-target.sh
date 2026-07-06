@@ -19,7 +19,7 @@ cd /tmp/tinycc
 	--libpaths=/lib \
 	--elfinterp=/lib/ld-musl-aarch64.so.1 \
 	--crtprefix=/lib \
-	--tccdir=/lib \
+	--tccdir=/lib/tcc \
 	--config-bcheck=no
 # Ensure dynamic musl link (configure may default LDFLAGS=-static for *gcc* names).
 sed -i 's|^LDFLAGS=.*|LDFLAGS=-Wl,-dynamic-linker,/lib/ld-musl-aarch64.so.1|' config.mak

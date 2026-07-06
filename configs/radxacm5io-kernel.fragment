@@ -153,6 +153,10 @@ CONFIG_OVERLAY_FS=y
 # CONFIG_BLK_DEV_INITRD is not set
 
 
+# Usermode hotplug helper (/proc/sys/kernel/hotplug → /bin/hotplugd)
+CONFIG_UEVENT_HELPER=y
+CONFIG_UEVENT_HELPER_PATH=""
+
 # --- Character devices / terminals (TTY, VT, PTY, serial, input) ---
 # Required for getty, mksh, job control, /dev/null|zero|tty|pts, HDMI fbcon, USB kbd
 CONFIG_TTY=y
