@@ -198,13 +198,29 @@ vi /etc/resolv.conf
 
 ### Users
 
+lin0 ships as a single-user system (root only). Toybox `useradd` /
+`adduser` are not built in; add accounts by hand.
+
+On a running system, as root:
+
 ```sh
-adduser myuser
+# primary group (gid 100 is already in /etc/group as "users")
+echo 'myuser::1000:100:myuser:/home/myuser:/bin/sh' >> /etc/passwd
+mkdir -p /home/myuser
+chown 1000:100 /home/myuser
 passwd myuser
 ```
 
-Or edit `etc/passwd` / `etc/shells` in the tree and create the home directory
-before rebuilding. Lock down root with `passwd` after first boot.
+Then `su - myuser` or log in as `myuser` at the getty prompt.
+
+Passwords live in `/etc/passwd` (there is no `/etc/shadow`). `passwd`
+updates that file. Use a free uid (1000+) and an existing gid from
+`/etc/group` (default `users` is 100). Shell must be listed in
+`/etc/shells` (default `/bin/sh`).
+
+To bake a user into the image, edit `etc/passwd` and `etc/group` in the
+tree, create the home directory under `rootfs/home/`, then rebuild.
+Lock down root with `passwd` after first boot.
 
 ### Extra software
 

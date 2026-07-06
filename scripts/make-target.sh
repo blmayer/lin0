@@ -13,13 +13,21 @@ cd /tmp/tinycc
 
 ./configure --prefix=/ \
 	--cc=tcc \
+	--extra-ldflags='-Wl,-dynamic-linker,/lib/ld-musl-aarch64.so.1' \
 	--sysincludepaths=/include \
 	--config-musl \
 	--libpaths=/lib \
-	--elfinterp=/lib/libc.so \
+	--elfinterp=/lib/ld-musl-aarch64.so.1 \
 	--crtprefix=/lib \
 	--tccdir=/lib \
 	--config-bcheck=no
+# Ensure dynamic musl link (configure may default LDFLAGS=-static for *gcc* names).
+sed -i 's|^LDFLAGS=.*|LDFLAGS=-Wl,-dynamic-linker,/lib/ld-musl-aarch64.so.1|' config.mak
 make && make install
-mv /bin/tcc /bin/cc
+# Keep argv0 as tcc so libtool matches tcc*); POSIX cc is a symlink.
+ln -sfn tcc /bin/cc
+ln -sfn libc.so /lib/ld-musl-aarch64.so.1
+printf '%s\n' '#!/bin/sh' 'tcc -ar "$@"' > /bin/ar
+printf '%s\n' '#!/bin/sh' 'exec true' > /bin/ranlib
+chmod +x /bin/ar /bin/ranlib
 cd ..

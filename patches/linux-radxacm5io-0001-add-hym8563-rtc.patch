@@ -1,7 +1,8 @@
-From 8841981021b5f98522ad44fe40e11d0c0e756534 Mon Sep 17 00:00:00 2001
+From bc1f8164d6b8600a8e9d8f8daa767e96c6d227d4 Mon Sep 17 00:00:00 2001
 From: Brian Mayer <bleemayer@gmail.com>
 Date: Thu, 2 Jul 2026 14:51:51 -0300
-Subject: [PATCH] arm64: dts: rockchip: add HYM8563 RTC to Radxa CM5 IO board
+Subject: [PATCH v2] arm64: dts: rockchip: add HYM8563 RTC to Radxa CM5 IO
+ board
 
 The Radxa CM5 IO carrier has a Haoyu HYM8563 real-time clock on I2C6 at
 address 0x51, with its interrupt line on GPIO0_B0 and a CR1220 backup
@@ -10,16 +11,23 @@ when CONFIG_RTC_DRV_HYM8563 is enabled.
 
 Describe the RTC, wire the interrupt pin with a pull-up, mark it as a
 wakeup source, and point the rtc0 alias at it so RTC_HCTOSYS/SYSTOHC use
-the external clock. Wiring matches Radxa's downstream board support.
+the external clock. Wiring matches Radxa's downstream board support and
+uses schematic names for the rtc_int_l pinctrl entry.
 
+Assisted-by: Grok:grok-build
 Signed-off-by: Brian Mayer <bleemayer@gmail.com>
-Tested-by: Brian Mayer <bleemayer@gmail.com>
 ---
  .../dts/rockchip/rk3588s-radxa-cm5-io.dts     | 19 +++++++++++++++++++
  1 file changed, 19 insertions(+)
 
+Changes in v2:
+- Rename pinctrl to rtc_int_l / rtc-int-l to match schematics
+- Drop Tested-by (covered by Signed-off-by)
+- Add Assisted-by: Grok:grok-build
+- Send inline with git send-email (not as attachment)
+
 diff --git a/arch/arm64/boot/dts/rockchip/rk3588s-radxa-cm5-io.dts b/arch/arm64/boot/dts/rockchip/rk3588s-radxa-cm5-io.dts
-index af4a9bc01..1a2c72831 100644
+index af4a9bc01..d22db4d18 100644
 --- a/arch/arm64/boot/dts/rockchip/rk3588s-radxa-cm5-io.dts
 +++ b/arch/arm64/boot/dts/rockchip/rk3588s-radxa-cm5-io.dts
 @@ -19,6 +19,7 @@ / {
@@ -43,7 +51,7 @@ index af4a9bc01..1a2c72831 100644
 +		interrupt-parent = <&gpio0>;
 +		interrupts = <RK_PB0 IRQ_TYPE_LEVEL_LOW>;
 +		pinctrl-names = "default";
-+		pinctrl-0 = <&rtc_int>;
++		pinctrl-0 = <&rtc_int_l>;
 +		wakeup-source;
 +	};
  };
@@ -54,7 +62,7 @@ index af4a9bc01..1a2c72831 100644
  	};
  
 +	hym8563 {
-+		rtc_int: rtc-int {
++		rtc_int_l: rtc-int-l {
 +			rockchip,pins = <0 RK_PB0 RK_FUNC_GPIO &pcfg_pull_up>;
 +		};
 +	};

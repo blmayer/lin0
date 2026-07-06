@@ -1,0 +1,15 @@
+# build outputs (recreated by make)
+/build/
+/rootfs/
+/*.img
+/linux-firmware/
+
+# on-device drop-ins stay local (copied by make rootfs-home-pkg)
+/pkg/*
+!/pkg/.gitkeep
+
+# editor / local junk
+.DS_Store
+.tai
+.tai-session.json
+/J

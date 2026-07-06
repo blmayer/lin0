@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lin0 wiki</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:52ch;margin:2ch auto}a{color:#ff00ff}</style>
+<pre>
+<a href=index.html>lin0</a> / <b>wiki</b>
+
+
+hints for living on a bare system. edit the source
+tree under <i>etc/</i> before rebuild, or change files
+on a running box as root. includes notes on building
+extra software such as bgce and bgtk.
+
+
+<b>contents</b>
+
+- <a href=#login>login</a>
+- <a href=#users>users</a>
+- <a href=#history>shell history</a>
+- <a href=#hostname>hostname</a>
+- <a href=#tmp>/tmp</a>
+- <a href=#network>networking</a>
+- <a href=#passwd>passwords</a>
+- <a href=#notes>notes on su / getty</a>
+- <a href=#build>building software</a>
+- <a href=#bgce>bgce and bgtk</a>
+
+
+<a id=login></a><b>login</b>
+
+after boot you get a getty on the console. default
+account:
+
+- user: root
+- password: lin0
+
+there is no systemd — init is a shell script that
+loops <i>getty</i>, which runs <i>login</i>. change the root
+password after first boot:
+
+	passwd
+
+
+<a id=users></a><b>users</b>
+
+lin0 ships as a single-user system (root only).
+toybox <i>useradd</i> / <i>adduser</i> are not built in; add
+accounts by hand.
+
+shipped files:
+
+- <i>/etc/passwd</i> — accounts and password hashes
+- <i>/etc/group</i> — groups (root:0, users:100,
+  video:44, input:45); member lists start empty
+- no <i>/etc/shadow</i> — passwords live in passwd
+
+on a running system, as root:
+
+	# primary group: users (gid 100) from /etc/group
+	echo 'name::1000:100:name:/home/name:/bin/sh' 		>> /etc/passwd
+	mkdir -p /home/name
+	chown 1000:100 /home/name
+	passwd name
+
+	# supplementary groups (edit member list; leave
+	# empty until you add names):
+	#   video:x:44:
+	#   input:x:45:name
+	# append with sed, e.g. video for framebuffer:
+	sed -i 's/^video:x:44:$/video:x:44:name/' 		/etc/group
+	sed -i 's/^input:x:45:$/input:x:45:name/' 		/etc/group
+
+	# align device nodes if they are root:root 600
+	chown root:video /dev/fb0 && chmod 660 /dev/fb0
+	chown root:input /dev/input/event*
+	chmod 660 /dev/input/event*
+
+then re-login so <i>id</i> shows the new groups:
+
+	su - name
+
+or type the account name at the getty login prompt.
+
+rules of thumb:
+
+- pick a free uid (1000+)
+- primary gid from <i>/etc/group</i> (users=100)
+- extra groups: comma-separated after the last colon
+  in <i>/etc/group</i> (video=44, input=45)
+- shell must be in <i>/etc/shells</i> (default /bin/sh)
+- home must exist and be owned by that uid:gid
+- group changes apply at next login
+
+to bake accounts into the image, edit <i>etc/passwd</i>
+and <i>etc/group</i> in the tree, create the home under
+<i>rootfs/home/</i>, then rebuild.
+
+
+<a id=history></a><b>shell history</b>
+
+the login shell is <b>mksh</b> (as /bin/sh). history is
+only in memory unless you set <i>HISTFILE</i>.
+
+for a normal user, create startup files in their
+home (must be writable by that user).
+
+interactive shells source <i>~/.mkshrc</i> (or $ENV):
+
+	cat > /home/myuser/.mkshrc <<'EOT'
+	export HISTFILE=$HOME/.mksh_history
+	export HISTSIZE=2047
+	EOT
+	chown 1000:100 /home/myuser/.mkshrc
+
+login shells (getty/login, <i>su - user</i>) also run
+<i>/etc/profile</i> then <i>~/.profile</i>. optional:
+
+	cat > /home/myuser/.profile <<'EOT'
+	export HISTFILE=$HOME/.mksh_history
+	export HISTSIZE=2047
+	[ -r "$HOME/.mkshrc" ] && . "$HOME/.mkshrc"
+	EOT
+	chown 1000:100 /home/myuser/.profile
+
+check:
+
+	su - myuser
+	echo $HISTFILE
+	# run a few commands, exit, log in again
+	fc -l
+	cat ~/.mksh_history
+
+notes:
+
+- default HISTSIZE is 2047 if unset; max 65535
+- same idea works for root under /home/root/
+- if HISTFILE is unset or empty, no file is used
+
+
+<a id=hostname></a><b>hostname</b>
+
+the name in <i>/etc/hostname</i> is only a file until something
+calls <i>sethostname(2)</i>. init does:
+
+	hostname -F /etc/hostname
+
+so <i>gethostname()</i>, <i>uname -n</i>, getty's prompt, and most
+programs see it. without that step the kernel name stays empty
+or (none) even though the file says lin0.
+
+change the name:
+
+	echo mybox > /etc/hostname
+	hostname -F /etc/hostname
+
+also keep <i>/etc/hosts</i> in sync if tools resolve the local
+name (sudo-like checks, some build systems, hostname -f):
+
+	127.0.0.1	localhost mybox
+	::1		localhost ip6-localhost ip6-loopback
+
+default image uses hostname <i>lin0</i> in both files.
+
+
+<a id=tmp></a><b>/tmp</b>
+
+many tools (mksh here-docs, ./configure, compilers) create
+temporary files under <i>/tmp</i>. that directory must be
+world-writable with the sticky bit:
+
+	# mode should be drwxrwxrwt (1777)
+	ls -ld /tmp
+
+if you see errors like:
+
+	cant create temporary file /tmp/....tmp: permission denied
+
+then either the directory is not 1777, or it was never
+mounted. on a running system (as root):
+
+	chmod 1777 /tmp
+	# or use a ram-backed tmp (preferred):
+	mount -t tmpfs -o mode=1777 tmpfs /tmp
+
+current lin0 init mounts tmpfs on /tmp with mode 1777 at
+boot. the rootfs skeleton also keeps /tmp as 1777 so it
+works even before that mount.
+
+
+<a id=network></a><b>networking</b>
+
+default dns ships in <i>etc/resolv.conf</i>. on a
+running system:
+
+	vi /etc/resolv.conf
+
+install what you need on the target (for example
+wpa_supplicant for wi-fi). lin0 is a starting
+point, not a full desktop stack.
+
+
+<a id=passwd></a><b>passwords</b>
+
+the <i>passwd</i> applet updates <i>/etc/passwd</i> when the
+password field is not "x" (shadow placeholder).
+
+	passwd              # change your own
+	passwd myuser       # as root: set myuser
+
+there is no /etc/shadow in the default image.
+do not set the passwd field to a lone "x" unless
+you also create a proper shadow entry.
+
+
+<a id=notes></a><b>notes on su / getty</b>
+
+if non-root login or <i>su</i> fails, check the account
+first — incomplete users are the usual cause.
+
+- getty does not force root; it prompts and runs
+  login with the name you type
+- as root, <i>su otheruser</i> needs a valid passwd line
+  and a working shell path
+- non-root <i>su</i> needs more: toybox setuid root and
+  (for toybox su) a modern hash in /etc/shadow —
+  the default image is not set up for that
+- missing home: login may warn and fall back to /
+
+
+<a id=build></a><b>building software</b>
+
+the on-box compiler is <i>/bin/tcc</i>; <i>/bin/cc</i> is a
+symlink to it. use <i>CC=/bin/tcc</i> so libtool sees
+basename <i>tcc</i> and fills in shared-link commands.
+there is no <i>/usr</i>: put binaries in <i>/bin</i>,
+libraries in <i>/lib</i>, headers in <i>/include</i>,
+data in <i>/share</i>.
+
+	export PATH=/bin
+	export CC=/bin/tcc
+	export LD=/bin/tcc
+	export AR='/bin/tcc -ar'
+	export RANLIB=true
+
+configure scripts should get <i>--prefix=/</i> so files
+land in those directories. <i>AR</i> / <i>RANLIB</i> matter:
+libtool calls them, and tcc archives use <i>tcc -ar</i>
+with ranlib as a no-op. lin0 has no <i>pkg-config</i>,
+so do not install <i>.pc</i> files:
+
+	make install pkgconfigdir=/tmp/pc
+	rm -rf /tmp/pc /lib/pkgconfig
+
+prefer <i>.tar.gz</i> sources (no <i>xz</i> applet).
+<i>wget</i> works; <i>git</i> is not shipped. toybox
+<i>tar</i> does not inflate gzip for you — decompress
+first, then extract:
+
+	gunzip make-4.4.1.tar.gz
+	tar xf make-4.4.1.tar
+	cd make-4.4.1
+
+we want <b>shared</b> libs (<i>.so</i>) in <i>/lib</i>.
+for autotools packages that default to both, pass
+<i>--enable-shared --disable-static</i> so libtool
+only builds <i>.so</i> objects (avoids bogus
+<i>.lo</i> errors with tcc). if a build fails
+halfway:
+
+	make distclean
+	rm -rf .libs objs/.libs
+	find . -name '*.lo' -delete
+
+then reconfigure with the same flags. if configure
+still rejects tcc, build that one binary elsewhere
+for aarch64/musl and copy the <i>.so</i> and headers
+in. do not set <i>CC=/bin/cc</i> for libtool-using
+packages — basename <i>cc</i> leaves
+<i>archive_cmds</i> empty even though the compiler
+is tcc.
+
+many tools need a writable <i>/tmp</i> (see above) and
+enough space on the root partition — enlarge images
+or build on mounted storage when trees get big.
+
+
+<a id=bgce></a><b>bgce and bgtk</b>
+
+<a href=//terminal.pink/bgce/>bgce</a> is a minimal
+framebuffer compositor; <a href=//terminal.pink/bgtk/>bgtk</a>
+is its toolkit. build on the target after the notes in
+<a href=#build>building software</a>. order matters:
+make, zlib, freetype, libxml2, a font, then bgce, then
+bgtk. no libdrm required (default backend is
+<i>/dev/fb0</i>).
+
+stage work under <i>/home/root/src</i>. hdmi and a usb
+keyboard/mouse should be attached:
+
+	ls -l /dev/fb0 /dev/input/event*
+
+<i>downloads</i> (github mirrors redirect; wget follows):
+
+- <a href=https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz>make-4.4.1.tar.gz</a>
+- <a href=https://zlib.net/zlib-1.3.1.tar.gz>zlib-1.3.1.tar.gz</a>
+- <a href=https://download.savannah.gnu.org/releases/freetype/freetype-2.13.3.tar.gz>freetype-2.13.3.tar.gz</a>
+- <a href=https://download.gnome.org/sources/libxml2/2.13/libxml2-2.13.5.tar.gz>libxml2-2.13.5.tar.gz</a>
+- dejavu sans: copy <i>DejaVuSans.ttf</i> from another
+  machine if needed
+- <a href=https://github.com/blmayer/bgce/archive/refs/heads/main.tar.gz>bgce main.tar.gz</a>
+  (image ships a fbdev-default snapshot as
+  <i>bgce-main.tar.gz</i> in <i>/home/root</i>)
+- <a href=https://github.com/blmayer/bgtk/archive/refs/heads/main.tar.gz>bgtk main.tar.gz</a>
+
+<i>make</i> (bootstrap if the image lacks /bin/make):
+
+	gunzip make-4.4.1.tar.gz
+	tar xf make-4.4.1.tar
+	cd make-4.4.1
+	./configure --prefix=/ CC=/bin/tcc
+	./build.sh
+	./make install
+	cd ..
+
+<i>zlib</i>, <i>freetype</i>, <i>libxml2</i> (release
+tarballs ship configure). keep the exports from
+<a href=#build>building software</a>:
+
+	gunzip zlib-1.3.1.tar.gz
+	tar xf zlib-1.3.1.tar
+	cd zlib-1.3.1
+	./configure --prefix=/ --shared
+	make
+	make install pkgconfigdir=/tmp/pc
+	rm -rf /tmp/pc
+	cd ..
+
+	gunzip freetype-2.13.3.tar.gz
+	tar xf freetype-2.13.3.tar
+	cd freetype-2.13.3
+	./configure --prefix=/ \
+		--enable-shared --disable-static
+	grep '^archive_cmds=' builds/unix/libtool
+	# with CC=/bin/tcc this should be non-empty
+	make
+	ls objs/.libs/libfreetype.so.6.20.2
+	make install pkgconfigdir=/tmp/pc
+	rm -rf /tmp/pc /lib/pkgconfig
+	cd ..
+
+	gunzip libxml2-2.13.5.tar.gz
+	tar xf libxml2-2.13.5.tar
+	cd libxml2-2.13.5
+	./configure --prefix=/ \
+		--enable-shared --disable-static \
+		--without-python
+	make
+	make install pkgconfigdir=/tmp/pc
+	rm -rf /tmp/pc
+	cd ..
+
+python is only for optional bindings (on by
+default). <i>--without-python</i> builds
+<i>libxml2.so</i> / <i>xmllint</i> with no
+interpreter. lin0 has no python.
+
+<i>font</i>:
+
+	mkdir -p /share/fonts/truetype/dejavu
+	cp DejaVuSans.ttf \
+		/share/fonts/truetype/dejavu/
+
+bgtk also reads <i>~/.config/bgtk.conf</i> if you want to
+pin the path.
+
+<i>bgce</i> (installs to /bin, /lib, /include). save
+the github archive as <i>bgce-main.tar.gz</i>:
+
+	gunzip bgce-main.tar.gz
+	tar xf bgce-main.tar
+	cd bgce-main
+	make CC=/bin/tcc          # /dev/fb0, no libdrm
+	# make CC=/bin/tcc BACKEND=drm   # optional
+	make install
+	cd ..
+
+	bgce &
+	# log: ~/.cache/bgce/bgce.log
+	# quit: ctrl+alt+q
+
+optional <i>~/.config/bgce.conf</i>:
+
+	[background]
+	type = color
+	color = #336699
+
+	[shortcuts]
+	ctrl+alt+q = builtin:exit
+	sysrq = builtin:screenshot
+
+<i>bgtk</i> (needs a running bgce for real apps):
+
+	gunzip bgtk-main.tar.gz
+	tar xf bgtk-main.tar
+	cd bgtk-main
+	make CC=/bin/tcc
+	make install
+
+	bgce &
+	launcher
+	# or test_app, terminal, image_viewer,
+	# settings
+
+skip <i>gemini_browser</i> unless you also build
+openssl (lin0 ships bearssl/libtls, not libssl).
+headless ui checks need no display device:
+
+	make headless && ./headless
+
+stock lin0 is root-only, so /dev/fb0 and /dev/input
+permissions are fine for bring-up. ignore
+<i>ldconfig</i> failures on install — dynamic libs
+load from /lib by default.
+
+
+<b>getting help</b>
+
+mailing list: lin0 AT terminal DOT pink
+
+back to the <a href=index.html>home page</a>.
+
+
+(C) 2023-26 Brian Mayer
+</pre>

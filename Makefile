@@ -61,7 +61,7 @@ export outdir := $(CURDIR)/rootfs
 export PLATFORM
 
 RADXA_LINUXVER   ?= master
-RADXA_P3_MB      ?= 128
+RADXA_P3_MB      ?= 256
 RADXA_P3_LBA     := 679936
 RADXA_DTB        := rk3588s-radxa-cm5-io.dtb
 RADXA_OFFICIAL   ?= build/official-radxa-inspect/radxa-cm5-io_bookworm_cli_b3.output.img
@@ -77,7 +77,7 @@ PLAT_CC := $(CURDIR)/rootfs/bin/musl-gcc
 
 SKIP_CHROOT_radxacm5io := 1
 POST_TARGET_radxacm5io := radxacm5io-postinstall
-TOYBOX_CFLAGS := -Os -fPIE -I$(TLS_INCLUDE) $(TLS_CFLAGS)
+TOYBOX_CFLAGS := -Os -fPIE -I$(TLS_INCLUDE) -I$(CURDIR)/rootfs/include $(TLS_CFLAGS)
 TOYBOX_LDFLAGS = -pie -L$(CURDIR)/rootfs/lib -Wl,--gc-sections -Wl,-rpath,/lib \
 	-ltls -lbearssl -Wl,-dynamic-linker,/lib/$(MUSL_LDSONAME)
 TOYBOX_STRIP := strip -s -R .note -R .comment
@@ -87,8 +87,8 @@ ROOTFS_ETC_SSL := rootfs/etc/ssl/cert.pem rootfs/etc/ssl/certs/ca-certificates.c
 ROOTFS_ETC := $(patsubst etc/%,rootfs/etc/%,$(ETC_SRC)) $(ROOTFS_ETC_SSL)
 
 INIT_COMMON := rootfs/bin/toybox $(ROOTFS_MUSL_LD) $(ROOTFS_TLS_LIBS) $(ROOTFS_ETC)
-INIT_DEPS = rootfs/bin/cc $(INIT_COMMON)
-INIT_DEPS_radxacm5io = rootfs/bin/musl-gcc rootfs/boot/Image $(INIT_COMMON)
+INIT_DEPS = rootfs/bin/tcc rootfs/bin/cc $(INIT_COMMON)
+INIT_DEPS_radxacm5io = rootfs/bin/tcc rootfs/bin/cc rootfs/boot/Image $(INIT_COMMON)
 init_deps = $(or $(INIT_DEPS_$(PLATFORM)),$(INIT_DEPS))
 
 POST_EXTRA = rootfs/lib/libwolfssl.a rootfs/lib/libcurl.so
@@ -117,11 +117,26 @@ rootfs/etc/ssl/cert.pem rootfs/etc/ssl/certs/ca-certificates.crt: build/cacert.p
 	rm -f $@
 	cp build/cacert.pem $@
 
-rootfs/bin/init: init $(init_deps)
-	mkdir -p $(dir $@) rootfs/home/root rootfs/dev/pts \
+rootfs/bin/init: init $(init_deps) | rootfs/home/root
+	mkdir -p $(dir $@) rootfs/dev/pts \
 		rootfs/proc rootfs/sys rootfs/tmp rootfs/var/run rootfs/run
+	chmod 1777 rootfs/tmp
 	cp $< $@
 	chmod +x $@
+
+# Optional drop-ins: pkg/* -> rootfs/home/root/* (pattern rule, no staging).
+PKG_FILES := $(wildcard pkg/*)
+ROOTFS_PKG := $(patsubst pkg/%,rootfs/home/root/%,$(PKG_FILES))
+
+rootfs/home/root/%: pkg/%
+	mkdir -p $(dir $@)
+	cp -a $< $@
+
+.PHONY: rootfs-home-pkg
+rootfs-home-pkg: $(ROOTFS_PKG) | rootfs/home/root
+
+rootfs/home/root:
+	mkdir -p $@
 
 # --- sources under build/ ---------------------------------------------------
 
@@ -205,12 +220,13 @@ rootfs/lib/libc.so rootfs/bin/musl-gcc: build/musl-$(MUSLVER)/configure
 $(ROOTFS_MUSL_LD) rootfs/bin/ldd rootfs/bin/ld: rootfs/lib/libc.so
 	mkdir -p rootfs/bin rootfs/lib
 	ln -sfn libc.so $(ROOTFS_MUSL_LD)
-	ln -sfn libc.so rootfs/lib/ld-linux-$(MUSL_ARCH).so.1
+	rm -f rootfs/lib/ld-linux-$(MUSL_ARCH).so.1
 	ln -sf ../lib/libc.so rootfs/bin/ldd
 	ln -sf ../lib/libc.so rootfs/bin/ld
 
-# headers + boot image are real outputs of the platform kernel build
-LINUX_HEADERS = rootfs/include/linux/version.h
+# Kernel UAPI lands in rootfs/include via headers_install INSTALL_HDR_PATH=rootfs
+# (alongside musl; never staged under usr/ or patched after the fact).
+LINUX_HEADERS = rootfs/include/linux/version.h rootfs/include/linux/types.h
 BOOT_IMAGE = rootfs/boot/vmlinuz
 BOOT_IMAGE_rpizero = rootfs/boot/kernel.img
 BOOT_IMAGE_radxacm5io = rootfs/boot/Image
@@ -248,34 +264,55 @@ rootfs/bin/sh: rootfs/bin/musl-gcc build/mksh/Build.sh
 	mkdir -p rootfs/share/man/man1
 	-install -c -m 444 build/mksh/mksh.1 rootfs/share/man/man1/
 
-rootfs/bin/ar:
-	mkdir -p $(dir $@)
-	printf '%s\n' '#!/bin/sh' 'cc -ar $$@' > $@
+# Keep the binary named tcc so libtool's tcc*) arms match (CC=/bin/tcc).
+# POSIX cc is a symlink. Build tcc dynamically against musl (PT_INTERP =
+# /lib/ld-musl-*.so.1, NEEDED libc.so) — never glibc's ld-linux / libc.so.6.
+TCC_ELFINTERP := /lib/$(MUSL_LDSONAME)
+TCC_LDFLAGS := -Wl,-dynamic-linker,$(TCC_ELFINTERP) -L$(CURDIR)/rootfs/lib
+rootfs/bin/tcc: rootfs/bin/make rootfs/bin/sh build/tinycc/.git \
+		$(LINUX_HEADERS) $(boot_image) rootfs/bin/musl-gcc $(ROOTFS_MUSL_LD) \
+		rootfs/lib/libc.so
+	@echo "==> tcc (dynamic musl via musl-gcc; interp $(TCC_ELFINTERP))"
+	$(MAKE) -C build/tinycc distclean >/dev/null 2>&1 || true
+	cd build/tinycc && ./configure --prefix=/ \
+		--cc="$(PLAT_CC)" \
+		--extra-ldflags="$(TCC_LDFLAGS)" \
+		--sysincludepaths=/include \
+		--libpaths=/lib \
+		--crtprefix=/lib --tccdir=/lib \
+		--elfinterp=$(TCC_ELFINTERP) \
+		--config-bcheck=no --disable-rpath --config-musl
+	# configure sets LDFLAGS=-static when CC looks like *gcc*; override on the make line.
+	$(MAKE) -C build/tinycc LDFLAGS='$(TCC_LDFLAGS)' tcc libtcc.a
+	$(MAKE) -C build/tinycc/lib \
+		XCC="$(CURDIR)/build/tinycc/tcc" \
+		XAR="$(CURDIR)/build/tinycc/tcc -ar" \
+		XFLAGS="-B$(CURDIR)/rootfs/lib -I$(CURDIR)/rootfs/include \
+		-I$(CURDIR)/build/tinycc -I$(CURDIR)/build/tinycc/include"
+	$(MAKE) -C build/tinycc DESTDIR=$(CURDIR)/rootfs install
+	@interp=$$(readelf -l rootfs/bin/tcc | sed -n 's/.*\[Requesting program interpreter: \(.*\)\]/\1/p'); \
+	[ "$$interp" = "$(TCC_ELFINTERP)" ] || { \
+		echo "error: tcc interpreter is '$$interp', expected $(TCC_ELFINTERP)" >&2; exit 1; }; \
+	! readelf -d rootfs/bin/tcc | grep -q 'libc\.so\.6\|ld-linux' || { \
+		echo "error: tcc is linked against glibc" >&2; exit 1; }; \
+	readelf -d rootfs/bin/tcc | grep -q '\[libc\.so\]' || { \
+		echo "error: tcc missing NEEDED libc.so (musl)" >&2; exit 1; }; \
+	chroot $(CURDIR)/rootfs /bin/tcc -vv 2>&1 | grep -q '$(TCC_ELFINTERP)' || { \
+		echo "error: tcc -vv does not report elfinterp $(TCC_ELFINTERP)" >&2; exit 1; }; \
+	echo "tcc ok: interp=$$interp dynamic musl"
+
+rootfs/bin/cc: rootfs/bin/tcc
+	ln -sfn tcc $@
+
+rootfs/bin/ar: rootfs/bin/tcc
+	printf '%s\n' '#!/bin/sh' 'tcc -ar "$$@"' > $@
 	chmod +x $@
 
-rootfs/bin/cc: rootfs/bin/make rootfs/bin/sh build/tinycc/.git \
-		$(LINUX_HEADERS) $(boot_image) rootfs/lib/libc.so
-	@echo "==> tcc pass1"
-	rm -f rootfs/lib/musl-gcc.specs rootfs/bin/musl-gcc
-	cd build/tinycc && ./configure --prefix=/ \
-		--sysincludepaths=$(CURDIR)/rootfs/include --libpaths=$(CURDIR)/rootfs/lib \
-		--tccdir=/lib --crtprefix=$(CURDIR)/rootfs/lib --elfinterp=$(CURDIR)/rootfs/lib/libc.so \
-		--config-static --config-bcheck=no --disable-rpath --config-musl
-	CC="$(PLAT_CC) -static --no-pie" $(MAKE) -C build/tinycc
-	$(MAKE) -C build/tinycc DESTDIR=$(CURDIR)/rootfs install
-	printf '%s\n' '#!/bin/sh' 'tcc -ar $$@' > rootfs/bin/ar && chmod +x rootfs/bin/ar
-	@echo "==> tcc pass2"
-	rm -rf build/tinycc && git clone "$(TCCURL)" build/tinycc
-	cd build/tinycc && ./configure --prefix=/ \
-		--sysincludepaths=$(CURDIR)/rootfs/include:/include --libpaths=$(CURDIR)/rootfs/lib:/lib \
-		--crtprefix=/lib --ar="$(CURDIR)/rootfs/bin/tcc -ar" --elfinterp=/lib/libc.so \
-		--config-static --config-bcheck=no --disable-rpath --config-musl
-	CC="$(CURDIR)/rootfs/bin/tcc -static" $(MAKE) -C build/tinycc
-	$(MAKE) -C build/tinycc DESTDIR=$(CURDIR)/rootfs install
-	mv rootfs/bin/tcc $@
-	printf '%s\n' '#!/bin/sh' 'cc -ar $$@' > rootfs/bin/ar && chmod +x rootfs/bin/ar
+rootfs/bin/ranlib: rootfs/bin/tcc
+	printf '%s\n' '#!/bin/sh' 'exec true' > $@
+	chmod +x $@
 
-rootfs/lib/libwolfssl.a: rootfs/bin/cc build/wolfssl-$(WOLFSSLVER)/configure
+rootfs/lib/libwolfssl.a: rootfs/bin/tcc build/wolfssl-$(WOLFSSLVER)/configure
 	@echo "==> wolfssl"
 	cd build/wolfssl-$(WOLFSSLVER) && ./configure --prefix=$(CURDIR)/rootfs \
 		--host=x86_64-linux-gnu --target=x86_64-linux-musl --enable-opensslextra
@@ -313,20 +350,17 @@ ifeq ($(PLATFORM),radxacm5io)
 rootfs/boot/Image rootfs/boot/$(RADXA_DTB) $(LINUX_HEADERS): configs/radxacm5io-linux.config \
 		rootfs/bin/musl-gcc build/linux-src/.lin0-patched
 	@echo "==> linux (radxacm5io)"
-	mkdir -p build/dtbs build/kheaders build/kheaders-staging \
-		rootfs/boot rootfs/usr/include rootfs/include/linux
-	cd build/linux-src && cp $(CURDIR)/configs/radxacm5io-linux.config .config
+	mkdir -p build/dtbs rootfs/boot
+	cp -f $(CURDIR)/configs/radxacm5io-linux.config build/linux-src/.config
 	$(MAKE) -C build/linux-src ARCH=arm64 olddefconfig
 	$(MAKE) -C build/linux-src ARCH=arm64 -j$$(nproc) Image modules dtbs
-	INSTALL_MOD_PATH=$(CURDIR)/rootfs $(MAKE) -C build/linux-src ARCH=arm64 modules_install
+	$(MAKE) -C build/linux-src ARCH=arm64 \
+		INSTALL_MOD_PATH=$(CURDIR)/rootfs \
+		INSTALL_HDR_PATH=$(CURDIR)/rootfs \
+		modules_install headers_install
 	cp -f build/linux-src/arch/arm64/boot/Image rootfs/boot/Image
-	cp -f build/linux-src/arch/arm64/boot/dts/rockchip/$(RADXA_DTB) rootfs/boot/$(RADXA_DTB)
-	cp -f build/linux-src/arch/arm64/boot/dts/rockchip/$(RADXA_DTB) build/dtbs/
-	$(MAKE) -C build/linux-src ARCH=arm64 headers_install
-	cp -f build/linux-src/usr/include/linux/version.h rootfs/include/linux/version.h
-	cd build/linux-src/usr/include && tar cf - . | tar xf - -C $(CURDIR)/rootfs/usr/include
-	rm -rf build/kheaders && mkdir -p build/kheaders
-	cd build/linux-src/usr/include && tar cf - . | tar xf - -C $(CURDIR)/build/kheaders
+	cp -f build/linux-src/arch/arm64/boot/dts/rockchip/$(RADXA_DTB) \
+		rootfs/boot/$(RADXA_DTB) build/dtbs/
 	strings rootfs/boot/$(RADXA_DTB) | grep -q haoyu,hym8563
 
 else ifeq ($(PLATFORM),rpizero)
@@ -334,12 +368,13 @@ rootfs/boot/kernel.img $(LINUX_HEADERS): configs/rpizero-linux.config \
 		rootfs/bin/musl-gcc build/linux-$(LINUXVER)/Makefile
 	@echo "==> linux (rpizero)"
 	mkdir -p rootfs/boot
-	cp configs/rpizero-linux.config build/linux-$(LINUXVER)/.config
-	CC=$(CURDIR)/rootfs/bin/musl-gcc ARCH=arm $(MAKE) -C build/linux-$(LINUXVER) olddefconfig
-	CC=$(CURDIR)/rootfs/bin/musl-gcc ARCH=arm $(MAKE) -C build/linux-$(LINUXVER)
-	CC=$(CURDIR)/rootfs/bin/musl-gcc ARCH=arm INSTALL_HDR_PATH=$(CURDIR)/rootfs \
-		INSTALL_PATH=$(CURDIR)/rootfs/boot INSTALL_MOD_PATH=$(CURDIR)/rootfs \
-		$(MAKE) -C build/linux-$(LINUXVER) zImage dtbs modules headers_install modules_install
+	cp -f configs/rpizero-linux.config build/linux-$(LINUXVER)/.config
+	$(MAKE) -C build/linux-$(LINUXVER) ARCH=arm CC=$(PLAT_CC) olddefconfig
+	$(MAKE) -C build/linux-$(LINUXVER) ARCH=arm CC=$(PLAT_CC) \
+		INSTALL_HDR_PATH=$(CURDIR)/rootfs \
+		INSTALL_PATH=$(CURDIR)/rootfs/boot \
+		INSTALL_MOD_PATH=$(CURDIR)/rootfs \
+		zImage dtbs modules headers_install modules_install
 	cp -f build/linux-$(LINUXVER)/arch/arm/boot/zImage rootfs/boot/kernel.img
 	-cp -f build/linux-$(LINUXVER)/arch/arm/boot/dts/broadcom/bcm2835-rpi-zero*.dtb rootfs/boot/
 	-cp -f build/linux-$(LINUXVER)/arch/arm/boot/dts/bcm2835-rpi-zero*.dtb rootfs/boot/
@@ -348,12 +383,13 @@ else
 rootfs/boot/vmlinuz $(LINUX_HEADERS): configs/$(PLATFORM)-linux.config \
 		rootfs/bin/musl-gcc build/linux-$(LINUXVER)/Makefile
 	@echo "==> linux ($(PLATFORM))"
-	cp configs/$(PLATFORM)-linux.config build/linux-$(LINUXVER)/.config
-	CC=$(CURDIR)/rootfs/bin/musl-gcc $(MAKE) -C build/linux-$(LINUXVER) olddefconfig
-	CC=$(CURDIR)/rootfs/bin/musl-gcc $(MAKE) -C build/linux-$(LINUXVER)
-	CC=$(CURDIR)/rootfs/bin/musl-gcc INSTALL_HDR_PATH=$(CURDIR)/rootfs INSTALL_PATH=$(CURDIR)/rootfs/boot \
+	cp -f configs/$(PLATFORM)-linux.config build/linux-$(LINUXVER)/.config
+	$(MAKE) -C build/linux-$(LINUXVER) CC=$(PLAT_CC) olddefconfig
+	$(MAKE) -C build/linux-$(LINUXVER) CC=$(PLAT_CC) \
+		INSTALL_HDR_PATH=$(CURDIR)/rootfs \
+		INSTALL_PATH=$(CURDIR)/rootfs/boot \
 		INSTALL_MOD_PATH=$(CURDIR)/rootfs \
-		$(MAKE) -C build/linux-$(LINUXVER) install headers_install modules_install
+		install headers_install modules_install
 endif
 
 # --- skeleton / post-install ------------------------------------------------
@@ -381,10 +417,13 @@ skeleton_for = $(or $(SKELETON_$(1)),$(SKELETON_))
 
 define POST_INSTALL_RULE
 .PHONY: post-install-$(1)
-post-install-$(1): $$(call skeleton_for,$(1)) $$(call post_extra,$(1))
+post-install-$(1): $$(call skeleton_for,$(1)) $$(call post_extra,$(1)) rootfs-home-pkg
 	@echo "==> post-install ($(1))"
 	$(if $(wildcard scripts/post-install-$(1).sh),cd build && export outdir=$(CURDIR)/rootfs PLATFORM=$(1) linuxver=$(LINUXVER) linux_src=$(CURDIR)/build/linux-$(LINUXVER) && . $(CURDIR)/scripts/post-install-$(1).sh)
 	$(if $(POST_TARGET_$(1)),$$(MAKE) $(POST_TARGET_$(1)))
+	@$(MAKE) rootfs-home-pkg
+	rm -f rootfs/bin/musl-gcc rootfs/lib/musl-gcc.specs \
+		rootfs/lib/ld-linux-$(MUSL_ARCH).so.1
 	-command -v sudo >/dev/null && sudo scripts/umounts.sh >/dev/null || true
 endef
 $(foreach p,$(PLATFORMS),$(eval $(call POST_INSTALL_RULE,$(p))))
@@ -416,7 +455,7 @@ define PLAT_RULE
 $(1): rootfs-$(1).tar.xz
 
 rootfs-$(1).tar.xz: force-platform-$(1) configs/$(1)-linux.config configs/$(1)-toybox.config \
-		rootfs/bin/init $(ROOTFS_ETC)
+		rootfs/bin/init $(ROOTFS_ETC) rootfs-home-pkg
 	@echo "==> tar rootfs-$(1).tar.xz"
 	cd rootfs && tar cfJ $(CURDIR)/rootfs-$(1).tar.xz .
 	@echo "Build complete: rootfs-$(1).tar.xz"
@@ -424,6 +463,7 @@ rootfs-$(1).tar.xz: force-platform-$(1) configs/$(1)-linux.config configs/$(1)-t
 .PHONY: force-platform-$(1)
 force-platform-$(1):
 	$(if $(run_platform_$(1)),$(run_platform_$(1)),@$(MAKE) PLATFORM=$(1) post-install-$(1))
+	@$(MAKE) rootfs-home-pkg
 endef
 $(foreach p,$(filter-out radxacm5io,$(PLATFORMS)),$(eval $(call PLAT_RULE,$(p))))
 
@@ -469,9 +509,11 @@ radxacm5io-bootfiles: rootfs/boot/extlinux/extlinux.conf \
 	rootfs/lib/firmware/regulatory.db $(RTL_FW_DST)
 
 .PHONY: radxacm5io-postinstall
-radxacm5io-postinstall: skeleton radxacm5io-bootfiles
+radxacm5io-postinstall: skeleton radxacm5io-bootfiles rootfs-home-pkg \
+		$(LINUX_HEADERS) rootfs/bin/toybox rootfs/bin/tcc $(ROOTFS_TLS_LIBS)
 	@echo "==> [radxacm5io] post-install"
-	@ls -lh rootfs/bin/toybox $(ROOTFS_TLS_LIBS)
+	@ls -lh rootfs/bin/toybox rootfs/bin/tcc $(ROOTFS_TLS_LIBS)
+	@ls -lh $(ROOTFS_PKG) 2>/dev/null || true
 
 # Build the arm64 toolchain image from an inline Dockerfile (Docker layer-caches repeats).
 .PHONY: radxacm5io-builder
@@ -525,8 +567,11 @@ radxacm5io-img: $(RADXA_OFFICIAL) radxacm5io-rootfs
 		'mkfs.ext4 -F -L "$$ROOT_LABEL" -U "$$ROOT_UUID" "$$LOOP"' \
 		'mount "$$LOOP" "$$MNT"' \
 		'rsync -aH "$$ROOTFS"/ "$$MNT"/' \
-		'if [ -f "$$MNT/lib/libc.so" ]; then chmod 755 "$$MNT/lib/libc.so"; ln -sfn libc.so "$$MNT/lib/ld-musl-aarch64.so.1"; fi' \
+		'chmod 755 "$$MNT/lib/libc.so"' \
+		'ln -sfn libc.so "$$MNT/lib/ld-musl-aarch64.so.1"' \
+		'rm -f "$$MNT/lib/ld-linux-aarch64.so.1" "$$MNT/lib/ld-linux-x86_64.so.2" "$$MNT/lib/ld-linux.so.2" "$$MNT/lib/ld-linux-armhf.so.3"' \
 		'mkdir -p "$$MNT/bin" "$$MNT/boot/extlinux" "$$MNT/proc" "$$MNT/sys" "$$MNT/dev" "$$MNT/tmp" "$$MNT/run"' \
+		'chmod 1777 "$$MNT/tmp"' \
 		'install -m 0755 /work/init "$$MNT/bin/init"' \
 		'install -m 0644 "$$ROOTFS/boot/Image" "$$MNT/boot/Image"' \
 		'install -m 0644 "$$ROOTFS/boot/$(RADXA_DTB)" "$$MNT/boot/$(RADXA_DTB)"' \
@@ -580,7 +625,7 @@ mount-rootfs:
 
 clean: umount-rootfs
 	rm -rf rootfs build/tls-include
-	rm -f rootfs-*.tar.xz build/cacert.pem build/cacert.pem.tmp*
+	rm -f rootfs-*.tar.xz lin0-*.img lin0-*.tar.xz build/cacert.pem build/cacert.pem.tmp*
 
 distclean: umount-rootfs
 	rm -rf build rootfs

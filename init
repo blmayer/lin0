@@ -13,8 +13,13 @@ dmesg -n 1
 mount -t sysfs sysfs /sys
 mount -t tmpfs tmpfs /run
 mount -t tmpfs tmpfs /var/run
+# world-writable sticky; configure scripts and shells need this
+mount -t tmpfs -o mode=1777 tmpfs /tmp
 mount -t devtmpfs devtmpfs /dev
 mount -t vfat /dev/mmcblk0p1 /boot
+
+# kernel utsname; /etc/hostname alone is not enough for gethostname()
+[ -s /etc/hostname ] && hostname -F /etc/hostname
 
 modprobe hid_apple
 modprobe realtek
