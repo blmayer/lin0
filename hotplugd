@@ -1,39 +1,54 @@
 #!/bin/sh
 # hotplugd — minimal mdev-style hotplug helper for lin0.
 #
-# Modes:
-#   hotplugd -s     coldplug once (fix devices already present)
-#   hotplugd -d     background poll loop (works without CONFIG_UEVENT_HELPER)
-#   hotplugd        kernel usermode helper: ACTION/SUBSYSTEM/DEVNAME in env
+#   hotplugd -s     coldplug once
+#   hotplugd -d     poll loop (default on boards without UEVENT_HELPER)
+#   hotplugd        kernel usermode helper (ACTION/SUBSYSTEM/DEVNAME in env)
 #
-# Register the helper (needs CONFIG_UEVENT_HELPER=y):
-#   echo /bin/hotplugd > /proc/sys/kernel/hotplug
-#
-# Rules are hardcoded for now (input nodes → root:input 0660).
+# Hardcoded rules (numeric gids match etc/group):
+#   /dev/input/*  /dev/uinput  → 0:45 (input)  0660
+#   /dev/fb*      /dev/dri/*   → 0:44 (video)  0660
 
 export PATH=/bin
 
-# --- rules (hardcoded; make config-driven later) ----------------------------
+# etc/group: video:x:44:  input:x:45:
+VIDEO_GID=44
+INPUT_GID=45
 
-# /dev/input/* and /dev/uinput → group input (gid 45), mode 0660
-rule_input() {
-	_node=$1
-	[ -e "$_node" ] || return 0
-	case "$_node" in
-	/dev/input/*|/dev/uinput)
-		chown root:input "$_node" 2>/dev/null
-		chmod 660 "$_node" 2>/dev/null
-		;;
-	esac
+fix_node() {
+	# $1=path  $2=gid
+	[ -e "$1" ] || return 0
+	[ -c "$1" ] || [ -b "$1" ] || return 0
+	chown "0:$2" "$1" || return 0
+	chmod 660 "$1" || true
 }
 
-apply_input_all() {
-	for _n in /dev/input/* /dev/uinput; do
-		rule_input "$_n"
+apply_all() {
+	if [ -d /dev/input ]; then
+		chown "0:$INPUT_GID" /dev/input 2>/dev/null || true
+		chmod 755 /dev/input 2>/dev/null || true
+		for n in /dev/input/*; do
+			[ -e "$n" ] || continue
+			fix_node "$n" "$INPUT_GID"
+		done
+	fi
+	fix_node /dev/uinput "$INPUT_GID"
+
+	for n in /dev/fb*; do
+		[ -e "$n" ] || continue
+		fix_node "$n" "$VIDEO_GID"
 	done
+
+	if [ -d /dev/dri ]; then
+		chown "0:$VIDEO_GID" /dev/dri 2>/dev/null || true
+		chmod 755 /dev/dri 2>/dev/null || true
+		for n in /dev/dri/*; do
+			[ -e "$n" ] || continue
+			fix_node "$n" "$VIDEO_GID"
+		done
+	fi
 }
 
-# One kernel uevent (usermode helper path).
 handle_uevent() {
 	case "${ACTION:-}" in
 	add|change) ;;
@@ -42,45 +57,40 @@ handle_uevent() {
 
 	case "${SUBSYSTEM:-}" in
 	input|hid)
-		[ -n "${DEVNAME:-}" ] && rule_input "/dev/$DEVNAME"
-		# Parent "input" events often have no DEVNAME; sweep the class.
-		apply_input_all
+		[ -n "${DEVNAME:-}" ] && fix_node "/dev/$DEVNAME" "$INPUT_GID"
+		apply_all
+		;;
+	graphics|drm|fb)
+		[ -n "${DEVNAME:-}" ] && fix_node "/dev/$DEVNAME" "$VIDEO_GID"
+		apply_all
 		;;
 	esac
 }
 
-# --- entry points -----------------------------------------------------------
-
 case "${1:-}" in
 -s|--scan)
-	apply_input_all
+	apply_all
 	exit 0
 	;;
 -d|--daemon)
 	while true; do
-		apply_input_all
-		sleep 2
+		apply_all
+		sleep 1
 	done
 	;;
 -h|--help)
-	cat <<'HELP'
-hotplugd — simple mdev-like hotplug for lin0
-
-  hotplugd -s     apply rules to devices already present (coldplug)
-  hotplugd -d     polling daemon (no kernel helper required)
-  hotplugd        kernel usermode helper (ACTION/SUBSYSTEM/DEVNAME in env)
-
-  echo /bin/hotplugd > /proc/sys/kernel/hotplug   # if CONFIG_UEVENT_HELPER=y
-HELP
+	printf '%s\n' \
+		'hotplugd -s     coldplug' \
+		'hotplugd -d     poll daemon' \
+		'hotplugd        kernel helper (env ACTION/SUBSYSTEM/DEVNAME)' \
+		'rules: input→gid 45, fb/dri→gid 44 (see /etc/group)'
 	exit 0
 	;;
 esac
 
-# Kernel helper invocation (or manual test with env set).
 if [ -n "${ACTION:-}" ] || [ -n "${SUBSYSTEM:-}" ]; then
 	handle_uevent
 	exit 0
 fi
 
-# Default: one-shot scan (same as -s).
-apply_input_all
+apply_all

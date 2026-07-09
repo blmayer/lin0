@@ -16,13 +16,16 @@ cd /tmp/tinycc
 	--extra-ldflags='-Wl,-dynamic-linker,/lib/ld-musl-aarch64.so.1' \
 	--sysincludepaths=/include \
 	--config-musl \
-	--libpaths=/lib \
+	--libpaths='{B}:/lib' \
 	--elfinterp=/lib/ld-musl-aarch64.so.1 \
 	--crtprefix=/lib \
 	--tccdir=/lib/tcc \
 	--config-bcheck=no
 # Ensure dynamic musl link (configure may default LDFLAGS=-static for *gcc* names).
 sed -i 's|^LDFLAGS=.*|LDFLAGS=-Wl,-dynamic-linker,/lib/ld-musl-aarch64.so.1|' config.mak
+# Drop a previous flat tccdir=/lib install if present.
+rm -f /lib/libtcc1.a /lib/runmain.o /lib/bt-exe.o /lib/bt-log.o /lib/bt-dll.o /lib/bcheck.o
+rm -rf /lib/include
 make && make install
 # Keep argv0 as tcc so libtool matches tcc*); POSIX cc is a symlink.
 ln -sfn tcc /bin/cc

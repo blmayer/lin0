@@ -9,17 +9,18 @@ trap 'sync; reboot -f' TERM
 trap 'sync; halt -f' USR1
 
 mount -t proc proc /proc
-dmesg -n 1
 mount -t sysfs sysfs /sys
 mount -t tmpfs tmpfs /run
 mount -t tmpfs tmpfs /var/run
-# world-writable sticky; configure scripts and shells need this
-mount -t tmpfs -o mode=1777 tmpfs /tmp
-mount -t devtmpfs devtmpfs /dev
+mount -t devtmpfs -o mode=1777 devtmpfs /dev
 mkdir -p /dev/pts /dev/shm
 mount -t devpts devpts -o gid=5,mode=0620 /dev/pts
-mount -t tmpfs -o mode=1777 tmpfs /dev/shm
+# /dev/shm is always a mount; force mode after mount.
+mount -t tmpfs tmpfs /dev/shm
+chmod 1777 /dev/shm
 mount -t vfat /dev/mmcblk0p1 /boot
+
+dmesg -n 1
 
 # kernel utsname; /etc/hostname alone is not enough for gethostname()
 [ -s /etc/hostname ] && hostname -F /etc/hostname
@@ -37,10 +38,6 @@ modprobe cfg80211
 modprobe mac80211
 modprobe rfkill
 modprobe rtl8xxxu
-
-# Coldplug then poll: poll covers boards without UEVENT_HELPER and late USB.
-hotplugd -s
-hotplugd -d &
 
 clear
 while true; do
