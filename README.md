@@ -38,7 +38,7 @@ make help          # list platforms
 make               # build for the host architecture
 ```
 
-Each platform is a Make target. Outputs are `rootfs-<platform>.tar.xz`
+Each platform is a Make target. Outputs are `rootfs-<platform>.tar.gz`
 (and a full disk image for some boards).
 
 ```sh
@@ -59,19 +59,19 @@ Architecture-only (no kernel):
 
 | Artifact | Notes |
 | --- | --- |
-| [`rootfs-x86_64.tar.xz`](./rootfs-x86_64.tar.xz) | ~3.3 MB |
-| [`rootfs-arm64.tar.xz`](./rootfs-arm64.tar.xz) | ~3.0 MB |
+| [`rootfs-x86_64.tar.gz`](./rootfs-x86_64.tar.gz) | ~4.6 MB |
+| [`rootfs-arm64.tar.gz`](./rootfs-arm64.tar.gz) | ~3.9 MB |
 
 Platform images (include kernel where applicable):
 
 | Platform | Artifact | Build |
 | --- | --- | --- |
-| HP EliteDesk 800 G1 | [`rootfs-hpelitedesk.tar.xz`](./rootfs-hpelitedesk.tar.xz) | `make hpelitedesk` |
-| Pinebook Pro | [`rootfs-pinebookpro.tar.xz`](./rootfs-pinebookpro.tar.xz) | `make pinebookpro` |
-| Raspberry Pi 3B+ | [`rootfs-rpi3b+.tar.xz`](./rootfs-rpi3b+.tar.xz) | `make rpi3bplus` |
-| Raspberry Pi Zero / Zero W | `rootfs-rpizero.tar.xz`, `lin0-rpizero.img` | `make rpizero` / `make rpizero-img` |
-| Raspberry Pi CM5 + IO | [`rootfs-rpi-cm5io.tar.xz`](./rootfs-rpi-cm5io.tar.xz) | `make rpi-cm5io` |
-| Radxa CM5 + IO | `rootfs-radxacm5io.tar.xz`, `lin0-radxacm5io.img` | `make radxacm5io` |
+| HP EliteDesk 800 G1 | [`rootfs-hpelitedesk.tar.gz`](./rootfs-hpelitedesk.tar.gz) | `make hpelitedesk` |
+| Pinebook Pro | [`rootfs-pinebookpro.tar.gz`](./rootfs-pinebookpro.tar.gz) | `make pinebookpro` |
+| Raspberry Pi 3B+ | [`rootfs-rpi3b+.tar.gz`](./rootfs-rpi3b+.tar.gz) | `make rpi3bplus` |
+| Raspberry Pi Zero / Zero W | `rootfs-rpizero.tar.gz`, `lin0-rpizero.img` | `make rpizero` / `make rpizero-img` |
+| Raspberry Pi CM5 + IO | [`rootfs-rpi-cm5io.tar.gz`](./rootfs-rpi-cm5io.tar.gz) | `make rpi-cm5io` |
+| Radxa CM5 + IO | `rootfs-radxacm5io.tar.gz`, `lin0-radxacm5io.img` | `make radxacm5io` |
 
 ### Docker
 
@@ -87,7 +87,7 @@ Architectures match the tarballs above.
 ## Install from a tarball
 
 ```sh
-tar -xf rootfs-ARCH.tar.xz -C /mnt/your-root
+tar -xf rootfs-ARCH.tar.gz -C /mnt/your-root
 cp path/to/kernel /mnt/your-root/boot/   # if the tarball has no kernel
 ```
 
@@ -114,7 +114,7 @@ make radxacm5io
 | Output | Purpose |
 | --- | --- |
 | `lin0-radxacm5io.img` | Full GPT image (loader at sector 64, ext4 root on partition 3) |
-| `rootfs-radxacm5io.tar.xz` | Root filesystem (kernel + DTB under `/boot`) |
+| `rootfs-radxacm5io.tar.gz` | Root filesystem (kernel + DTB under `/boot`) |
 | `build/rk3588_spl_loader*.bin` | Maskrom stage-1 loader for `rkdeveloptool db` |
 
 ### Flash to eMMC (recommended)
@@ -172,7 +172,7 @@ find the rootfs.
    make              # host architecture
    ```
 
-3. Install the resulting `rootfs-*.tar.xz` (or disk image) on the target.
+3. Install the resulting `rootfs-*.tar.gz` (or disk image) on the target.
 
 Static system config lives in `etc/` (generic only). TLS trust anchors are
 fetched at build time from [curl.se/ca/cacert.pem](https://curl.se/ca/cacert.pem)

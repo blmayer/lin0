@@ -1,6 +1,6 @@
 # lin0 — file prerequisites, literal paths, no stamps
 #
-#   make                 # host arch -> rootfs-<arch>.tar.xz
+#   make                 # host arch -> rootfs-<arch>.tar.gz
 #   make radxacm5io      # rootfs tarball + hybrid image
 #   make list | help | clean | distclean
 
@@ -221,7 +221,17 @@ else ifeq ($(PLATFORM),radxacm5io)
   BOOT_IMAGE = rootfs/boot/Image
 endif
 
-rootfs/bin/toybox: configs/$(PLATFORM)-toybox.config build/toybox/.git \
+LIN0_TOYBOX_PATCHES := $(sort $(wildcard patches/toybox-*.patch))
+
+# Apply lin0 toybox patches once per source tree checkout.
+build/toybox/.lin0-patched: build/toybox/.git $(LIN0_TOYBOX_PATCHES)
+	for p in $(LIN0_TOYBOX_PATCHES); do \
+		patch -d build/toybox -p1 -N < "$$p" || \
+		patch -d build/toybox -p1 -R -s --dry-run < "$$p"; \
+	done
+	touch $@
+
+rootfs/bin/toybox: configs/$(PLATFORM)-toybox.config build/toybox/.lin0-patched \
 		rootfs/bin/musl-gcc $(ROOTFS_MUSL_LD) $(LINUX_HEADERS) $(BOOT_IMAGE) \
 		$(ROOTFS_TLS_LIBS) $(ROOTFS_TLS_HDRS)
 	@echo "==> toybox ($(PLATFORM))"
@@ -415,13 +425,13 @@ RADXA_BUILDER_PKGS := build-essential gcc g++ make bison flex bc kmod cpio rsync
 
 define PLAT_RULE
 .PHONY: $(1)
-$(1): rootfs-$(1).tar.xz
+$(1): rootfs-$(1).tar.gz
 
-rootfs-$(1).tar.xz: force-platform-$(1) configs/$(1)-linux.config configs/$(1)-toybox.config \
+rootfs-$(1).tar.gz: force-platform-$(1) configs/$(1)-linux.config configs/$(1)-toybox.config \
 		rootfs/bin/init $(ROOTFS_ETC) rootfs-home-pkg
-	@echo "==> tar rootfs-$(1).tar.xz"
-	cd rootfs && tar cfJ $(CURDIR)/rootfs-$(1).tar.xz .
-	@echo "Build complete: rootfs-$(1).tar.xz"
+	@echo "==> tar rootfs-$(1).tar.gz"
+	cd rootfs && tar czf $(CURDIR)/rootfs-$(1).tar.gz .
+	@echo "Build complete: rootfs-$(1).tar.gz"
 
 .PHONY: force-platform-$(1)
 force-platform-$(1):
@@ -560,16 +570,16 @@ radxacm5io-img: $(RADXA_OFFICIAL) radxacm5io-rootfs
 
 .PHONY: radxacm5io
 radxacm5io: radxacm5io-img
-	@echo "==> tar rootfs-radxacm5io.tar.xz"
-	cd rootfs && tar cfJ $(CURDIR)/rootfs-radxacm5io.tar.xz .
-	@ls -lh lin0-radxacm5io.img rootfs-radxacm5io.tar.xz
+	@echo "==> tar rootfs-radxacm5io.tar.gz"
+	cd rootfs && tar czf $(CURDIR)/rootfs-radxacm5io.tar.gz .
+	@ls -lh lin0-radxacm5io.img rootfs-radxacm5io.tar.gz
 	@echo "Flash: rkdeveloptool wl 0 lin0-radxacm5io.img"
 
 # --- meta -------------------------------------------------------------------
 
 .PHONY: all help list clean distclean umount-rootfs mount-rootfs rpizero-img
 
-rpizero-img: rootfs-rpizero.tar.xz
+rpizero-img: rootfs-rpizero.tar.gz
 	scripts/mkimg-rpizero.sh
 
 ifeq ($(filter $(PLATFORM),$(PLATFORMS)),)
@@ -585,7 +595,7 @@ help:
 	@echo "lin0 — each platform is a Make target."
 	@echo "  make <platform>   one of: $(PLATFORMS)"
 	@echo "  make radxacm5io   rootfs tarball + hybrid image"
-	@echo "  make rpizero-img  SD image from rootfs-rpizero.tar.xz"
+	@echo "  make rpizero-img  SD image from rootfs-rpizero.tar.gz"
 	@echo "  Edit etc/*, init, configs/* — then rebuild."
 
 list:
@@ -599,10 +609,10 @@ mount-rootfs:
 
 clean: umount-rootfs
 	rm -rf rootfs
-	rm -f rootfs-*.tar.xz lin0-*.img lin0-*.tar.xz build/cacert.pem build/cacert.pem.tmp*
+	rm -f rootfs-*.tar.gz rootfs-*.tar.xz lin0-*.img lin0-*.tar.gz lin0-*.tar.xz build/cacert.pem build/cacert.pem.tmp*
 
 distclean: umount-rootfs
 	rm -rf build rootfs
-	rm -f rootfs-*.tar.xz lin0-*.img lin0-*.tar.xz
+	rm -f rootfs-*.tar.gz rootfs-*.tar.xz lin0-*.img lin0-*.tar.gz lin0-*.tar.xz
 
 .DEFAULT_GOAL := all

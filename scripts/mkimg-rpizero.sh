@@ -1,5 +1,5 @@
 #!/bin/sh
-# Build a flashable SD image for Raspberry Pi Zero / Zero W from rootfs-rpizero.tar.xz
+# Build a flashable SD image for Raspberry Pi Zero / Zero W from rootfs-rpizero.tar.gz
 #
 # Layout (classic RPi):
 #   p1  FAT32  ~64 MiB   /boot (firmware + kernel.img + DTB + config.txt)
@@ -18,7 +18,7 @@ cd "$REPO_ROOT"
 
 IMG_SIZE_MB="${IMG_SIZE_MB:-256}"
 BOOT_SIZE_MB="${BOOT_SIZE_MB:-64}"
-ROOTFS_TAR="${ROOTFS_TAR:-$REPO_ROOT/rootfs-rpizero.tar.xz}"
+ROOTFS_TAR="${ROOTFS_TAR:-$REPO_ROOT/rootfs-rpizero.tar.gz}"
 OUT_IMG="${OUT_IMG:-$REPO_ROOT/lin0-rpizero.img}"
 WORK="${WORK:-$REPO_ROOT/build/rpizero-img}"
 
