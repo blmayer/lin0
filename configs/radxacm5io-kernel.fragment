@@ -528,9 +528,22 @@ CONFIG_CRYPTO_NULL=y
 CONFIG_CRYPTO_HASH=y
 CONFIG_KEYS=y
 
+# --- Sound: minimum ALSA + USB audio + OSS mixer (/dev/mixer for toybox mix) ---
+# No SoC/HDMI ASoC — USB DAC/headset only. OSS emu is ALSA-backed (mainline has no pure OSS).
+CONFIG_SOUND=y
+CONFIG_SND=y
+CONFIG_SND_USB=y
+CONFIG_SND_USB_AUDIO=y
+CONFIG_SND_OSSEMUL=y
+CONFIG_SND_MIXER_OSS=y
+CONFIG_SND_PCM_OSS=y
+CONFIG_SND_PCM_OSS_PLUGINS=y
+# CONFIG_SND_SEQUENCER is not set
+# CONFIG_SND_SOC is not set
+# CONFIG_SND_HDA is not set
+
 # --- Explicitly off (still not full vendor defconfig) ---
 # CONFIG_PCI is not set
-# CONFIG_SOUND is not set
 # CONFIG_BT is not set
 # CONFIG_MEDIA_SUPPORT is not set
 # CONFIG_DRM_PANFROST is not set
