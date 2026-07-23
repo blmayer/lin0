@@ -53,25 +53,37 @@ only rebuilds what changed.
 
 ## Images
 
-### Rootfs tarballs
+Prebuilt tarballs live under [`www/`](./www/). After download, verify the
+full SHA-256 digest so the file has not been corrupted or tampered with:
 
-Architecture-only (no kernel):
+```sh
+# Linux
+sha256sum -c SHA256SUMS
 
-| Artifact | Notes |
-| --- | --- |
-| [`rootfs-x86_64.tar.gz`](./rootfs-x86_64.tar.gz) | ~4.6 MB |
-| [`rootfs-arm64.tar.gz`](./rootfs-arm64.tar.gz) | ~3.9 MB |
+# macOS
+shasum -a 256 -c SHA256SUMS
+```
 
-Platform images (include kernel where applicable):
+[`www/SHA256SUMS`](./www/SHA256SUMS) has the full digests. The `sha256` column
+below is the first 16 hex chars for a quick eyeball check. Arch-only builds
+have no kernel; the rest do. Raspberry Pi Zero is build-only (not published).
 
-| Platform | Artifact | Build |
-| --- | --- | --- |
-| HP EliteDesk 800 G1 | [`rootfs-hpelitedesk.tar.gz`](./rootfs-hpelitedesk.tar.gz) | `make hpelitedesk` |
-| Pinebook Pro | [`rootfs-pinebookpro.tar.gz`](./rootfs-pinebookpro.tar.gz) | `make pinebookpro` |
-| Raspberry Pi 3B+ | [`rootfs-rpi3b+.tar.gz`](./rootfs-rpi3b+.tar.gz) | `make rpi3bplus` |
-| Raspberry Pi Zero / Zero W | `rootfs-rpizero.tar.gz`, `lin0-rpizero.img` | `make rpizero` / `make rpizero-img` |
-| Raspberry Pi CM5 + IO | [`rootfs-rpi-cm5io.tar.gz`](./rootfs-rpi-cm5io.tar.gz) | `make rpi-cm5io` |
-| Radxa CM5 + IO | `rootfs-radxacm5io.tar.gz`, `lin0-radxacm5io.img` | `make radxacm5io` |
+```
++----------------------+------+------------------+------------------+
+| platform             | size | sha256           | build            |
++----------------------+------+------------------+------------------+
+| x86_64               | 4.6M | d9b0345efba6d227 | make x86_64      |
+| arm64                | 3.9M | a4f99c89fb6b2d97 | make arm64       |
+| hp elite desk 800 g1 |  14M | 73752c23c40d1fdd | make hpelitedesk |
+| pinebook pro         |  14M | 3e49689772dc0235 | make pinebookpro |
+| raspberry pi 3b+     |  35M | 6b859999760e0d59 | make rpi3bplus   |
+| rpi cm5 + io board   |  51M | 06bb5b9fdda241a9 | make rpi-cm5io   |
+| radxa cm5 + io       |  27M | 0af2d1501e4e6c82 | make radxacm5io  |
+| rpi zero / zero w    |    — | (local)          | make rpizero     |
++----------------------+------+------------------+------------------+
+```
+
+Tarballs: [`www/rootfs-*.tar.gz`](./www/).
 
 ### Docker
 

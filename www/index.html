@@ -79,19 +79,25 @@ start with a ready environment.
 <i>tarballs</i>
 
 our tarballs are compressed with gzip, thus .tar.gz
-files, these are targeted at platforms, and do not
-include the linux kernel:
+files. arch-only builds have no kernel; the rest do.
 
-- <a href=rootfs-x86_64.tar.gz download>x86_64</a> [4.6Mb]
-- <a href=rootfs-arm64.tar.gz download>arm64</a> [3.9Mb]
++----------------------+------+------------------+
+| platform             | size | sha256           |
++----------------------+------+------------------+
+| <a href=rootfs-x86_64.tar.gz download>x86_64</a>               | 4.6M | d9b0345efba6d227 |
+| <a href=rootfs-arm64.tar.gz download>arm64</a>                | 3.9M | a4f99c89fb6b2d97 |
+| <a href=rootfs-hpelitedesk.tar.gz download>hp elite desk 800 g1</a> |  14M | 73752c23c40d1fdd |
+| <a href=rootfs-pinebookpro.tar.gz download>pinebook pro</a>         |  14M | 3e49689772dc0235 |
+| <a href=rootfs-rpi3b+.tar.gz download>raspberry pi 3b+</a>     |  35M | 6b859999760e0d59 |
+| <a href=rootfs-rpi-cm5io.tar.gz download>rpi cm5 + io board</a>   |  51M | 06bb5b9fdda241a9 |
+| <a href=rootfs-radxacm5io.tar.gz download>radxa cm5 + io</a>       |  27M | 0af2d1501e4e6c82 |
++----------------------+------+------------------+
 
-and for specific platforms, including the kernel:
+sha256 column is a short prefix; full digests
+live in <a href=SHA256SUMS download>SHA256SUMS</a>. verify with:
 
-- <a href=rootfs-hpelitedesk.tar.gz download>hp elite desk 800 g1</a> [14Mb]
-- <a href=rootfs-pinebookpro.tar.gz download>pinebook pro</a> [14Mb]
-- <a href=rootfs-rpi3b+.tar.gz download>raspberry pi 3b+</a> [35Mb]
-- <a href=rootfs-rpi-cm5io.tar.gz download>raspberry pi cm5 + io board</a> [51Mb]
-- <a href=rootfs-radxacm5io.tar.gz download>radxa cm5 + io</a> [27Mb]
+	sha256sum -c SHA256SUMS
+	# macOS: shasum -a 256 -c SHA256SUMS
 
 
 <i>docker</i>
