@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lin0 39c8531</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}</style>
+<pre>
+<a href=index.html>lin0</a> / <b>commit</b>
+
+<a href=log.html>log</a> | <a href=tree.html>tree</a> | <a href=refs.html>refs</a>
+
+commit 39c8531
+parent <a href=commit-f84b93a.html>f84b93a</a> 
+author Brian Mayer &lt;bleemayer@gmail.com&gt;
+date   2026-07-06T15:03:27-03:00
+
+    Simplify rootfs header install and document on-device builds.
+
+    Install kernel UAPI directly into /include, add empty video/input
+    groups, and expand the wiki for fbdev bgce bring-up. Keep pkg/
+    drop-ins local via gitignore rather than vendoring tarball snapshots.
+
+<a href=tree-39c8531.html>tree</a>
+
+<b>diff</b>
+
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..360bed8
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,15 @@
++# build outputs (recreated by make)
++/build/
++/rootfs/
++/*.img
++/linux-firmware/
++
++# on-device drop-ins stay local (copied by make rootfs-home-pkg)
++/pkg/*
++!/pkg/.gitkeep
++
++# editor / local junk
++.DS_Store
++.tai
++.tai-session.json
++/J
+diff --git a/Makefile b/Makefile
+index 1c3d124..8cedec5 100644
+--- a/Makefile
++++ b/Makefile
+@@ -61,7 +61,7 @@ export outdir := $(CURDIR)/rootfs
+ export PLATFORM
+ 
+ RADXA_LINUXVER   ?= master
+-RADXA_P3_MB      ?= 128
++RADXA_P3_MB      ?= 256
+ RADXA_P3_LBA     := 679936
+ RADXA_DTB        := rk3588s-radxa-cm5-io.dtb
+ RADXA_OFFICIAL   ?= build/official-radxa-inspect/radxa-cm5-io_bookworm_cli_b3.output.img
+@@ -77,7 +77,7 @@ PLAT_CC := $(CURDIR)/rootfs/bin/musl-gcc
+ 
+ SKIP_CHROOT_radxacm5io := 1
+ POST_TARGET_radxacm5io := radxacm5io-postinstall
+-TOYBOX_CFLAGS := -Os -fPIE -I$(TLS_INCLUDE) $(TLS_CFLAGS)
++TOYBOX_CFLAGS := -Os -fPIE -I$(TLS_INCLUDE) -I$(CURDIR)/rootfs/include $(TLS_CFLAGS)
+ TOYBOX_LDFLAGS = -pie -L$(CURDIR)/rootfs/lib -Wl,--gc-sections -Wl,-rpath,/lib \
+ 	-ltls -lbearssl -Wl,-dynamic-linker,/lib/$(MUSL_LDSONAME)
+ TOYBOX_STRIP := strip -s -R .note -R .comment
+@@ -87,8 +87,8 @@ ROOTFS_ETC_SSL := rootfs/etc/ssl/cert.pem rootfs/etc/ssl/certs/ca-certificates.c
+ ROOTFS_ETC := $(patsubst etc/%,rootfs/etc/%,$(ETC_SRC)) $(ROOTFS_ETC_SSL)
+ 
+ INIT_COMMON := rootfs/bin/toybox $(ROOTFS_MUSL_LD) $(ROOTFS_TLS_LIBS) $(ROOTFS_ETC)
+-INIT_DEPS = rootfs/bin/cc $(INIT_COMMON)
+-INIT_DEPS_radxacm5io = rootfs/bin/musl-gcc rootfs/boot/Image $(INIT_COMMON)
++INIT_DEPS = rootfs/bin/tcc rootfs/bin/cc $(INIT_COMMON)
++INIT_DEPS_radxacm5io = rootfs/bin/tcc rootfs/bin/cc rootfs/boot/Image $(INIT_COMMON)
+ init_deps = $(or $(INIT_DEPS_$(PLATFORM)),$(INIT_DEPS))
+ 
+ POST_EXTRA = rootfs/lib/libwolfssl.a rootfs/lib/libcurl.so
+@@ -117,12 +117,27 @@ rootfs/etc/ssl/cert.pem rootfs/etc/ssl/certs/ca-certificates.crt: build/cacert.p
+ 	rm -f $@
+ 	cp build/cacert.pem $@
+ 
+-rootfs/bin/init: init $(init_deps)
+-	mkdir -p $(dir $@) rootfs/home/root rootfs/dev/pts \
++rootfs/bin/init: init $(init_deps) | rootfs/home/root
++	mkdir -p $(dir $@) rootfs/dev/pts \
+ 		rootfs/proc rootfs/sys rootfs/tmp rootfs/var/run rootfs/run
++	chmod 1777 rootfs/tmp
+ 	cp $&lt; $@
+ 	chmod +x $@
+ 
++# Optional drop-ins: pkg/* -&gt; rootfs/home/root/* (pattern rule, no staging).
++PKG_FILES := $(wildcard pkg/*)
++ROOTFS_PKG := $(patsubst pkg/%,rootfs/home/root/%,$(PKG_FILES))
++
++rootfs/home/root/%: pkg/%
++	mkdir -p $(dir $@)
++	cp -a $&lt; $@
++
++.PHONY: rootfs-home-pkg
++rootfs-home-pkg: $(ROOTFS_PKG) | rootfs/home/root
++
++rootfs/home/root:
++	mkdir -p $@
++
+ # --- sources under build/ ---------------------------------------------------
+ 
+ define fetch_tar
+@@ -205,12 +220,13 @@ rootfs/lib/libc.so rootfs/bin/musl-gcc: build/musl-$(MUSLVER)/configure
+ $(ROOTFS_MUSL_LD) rootfs/bin/ldd rootfs/bin/ld: rootfs/lib/libc.so
+ 	mkdir -p rootfs/bin rootfs/lib
+ 	ln -sfn libc.so $(ROOTFS_MUSL_LD)
+-	ln -sfn libc.so rootfs/lib/ld-linux-$(MUSL_ARCH).so.1
++	rm -f rootfs/lib/ld-linux-$(MUSL_ARCH).so.1
+ 	ln -sf ../lib/libc.so rootfs/bin/ldd
+ 	ln -sf ../lib/libc.so rootfs/bin/ld
+ 
+-# headers + boot image are real outputs of the platform kernel build
+-LINUX_HEADERS = rootfs/include/linux/version.h
++# Kernel UAPI lands in rootfs/include via headers_install INSTALL_HDR_PATH=rootfs
++# (alongside musl; never staged under usr/ or patched after the fact).
++LINUX_HEADERS = rootfs/include/linux/version.h rootfs/include/linux/types.h
+ BOOT_IMAGE = rootfs/boot/vmlinuz
+ BOOT_IMAGE_rpizero = rootfs/boot/kernel.img
+ BOOT_IMAGE_radxacm5io = rootfs/boot/Image
+@@ -248,34 +264,55 @@ rootfs/bin/sh: rootfs/bin/musl-gcc build/mksh/Build.sh
+ 	mkdir -p rootfs/share/man/man1
+ 	-install -c -m 444 build/mksh/mksh.1 rootfs/share/man/man1/
+ 
+-rootfs/bin/ar:
+-	mkdir -p $(dir $@)
+-	printf '%s\n' '#!/bin/sh' 'cc -ar $$@' &gt; $@
+-	chmod +x $@
+-
+-rootfs/bin/cc: rootfs/bin/make rootfs/bin/sh build/tinycc/.git \
+-		$(LINUX_HEADERS) $(boot_image) rootfs/lib/libc.so
+-	@echo "==&gt; tcc pass1"
+-	rm -f rootfs/lib/musl-gcc.specs rootfs/bin/musl-gcc
++# Keep the binary named tcc so libtool's tcc*) arms match (CC=/bin/tcc).
++# POSIX cc is a symlink. Build tcc dynamically against musl (PT_INTERP =
++# /lib/ld-musl-*.so.1, NEEDED libc.so) — never glibc's ld-linux / libc.so.6.
++TCC_ELFINTERP := /lib/$(MUSL_LDSONAME)
++TCC_LDFLAGS := -Wl,-dynamic-linker,$(TCC_ELFINTERP) -L$(CURDIR)/rootfs/lib
++rootfs/bin/tcc: rootfs/bin/make rootfs/bin/sh build/tinycc/.git \
++		$(LINUX_HEADERS) $(boot_image) rootfs/bin/musl-gcc $(ROOTFS_MUSL_LD) \
++		rootfs/lib/libc.so
++	@echo "==&gt; tcc (dynamic musl via musl-gcc; interp $(TCC_ELFINTERP))"
++	$(MAKE) -C build/tinycc distclean &gt;/dev/null 2&gt;&amp;1 || true
+ 	cd build/tinycc &amp;&amp; ./configure --prefix=/ \
+-		--sysincludepaths=$(CURDIR)/rootfs/include --libpaths=$(CURDIR)/rootfs/lib \
+-		--tccdir=/lib --crtprefix=$(CURDIR)/rootfs/lib --elfinterp=$(CURDIR)/rootfs/lib/libc.so \
+-		--config-static --config-bcheck=no --disable-rpath --config-musl
+-	CC="$(PLAT_CC) -static --no-pie" $(MAKE) -C build/tinycc
++		--cc="$(PLAT_CC)" \
++		--extra-ldflags="$(TCC_LDFLAGS)" \
++		--sysincludepaths=/include \
++		--libpaths=/lib \
++		--crtprefix=/lib --tccdir=/lib \
++		--elfinterp=$(TCC_ELFINTERP) \
++		--config-bcheck=no --disable-rpath --config-musl
++	# configure sets LDFLAGS=-static when CC looks like *gcc*; override on the make line.
++	$(MAKE) -C build/tinycc LDFLAGS='$(TCC_LDFLAGS)' tcc libtcc.a
++	$(MAKE) -C build/tinycc/lib \
++		XCC="$(CURDIR)/build/tinycc/tcc" \
++		XAR="$(CURDIR)/build/tinycc/tcc -ar" \
++		XFLAGS="-B$(CURDIR)/rootfs/lib -I$(CURDIR)/rootfs/include \
++		-I$(CURDIR)/build/tinycc -I$(CURDIR)/build/tinycc/include"
+ 	$(MAKE) -C build/tinycc DESTDIR=$(CURDIR)/rootfs install
+-	printf '%s\n' '#!/bin/sh' 'tcc -ar $$@' &gt; rootfs/bin/ar &amp;&amp; chmod +x rootfs/bin/ar
+-	@echo "==&gt; tcc pass2"
+-	rm -rf build/tinycc &amp;&amp; git clone "$(TCCURL)" build/tinycc
+-	cd build/tinycc &amp;&amp; ./configure --prefix=/ \
+-		--sysincludepaths=$(CURDIR)/rootfs/include:/include --libpaths=$(CURDIR)/rootfs/lib:/lib \
+-		--crtprefix=/lib --ar="$(CURDIR)/rootfs/bin/tcc -ar" --elfinterp=/lib/libc.so \
+-		--config-static --config-bcheck=no --disable-rpath --config-musl
+-	CC="$(CURDIR)/rootfs/bin/tcc -static" $(MAKE) -C build/tinycc
+-	$(MAKE) -C build/tinycc DESTDIR=$(CURDIR)/rootfs install
+-	mv rootfs/bin/tcc $@
+-	printf '%s\n' '#!/bin/sh' 'cc -ar $$@' &gt; rootfs/bin/ar &amp;&amp; chmod +x rootfs/bin/ar
++	@interp=$$(readelf -l rootfs/bin/tcc | sed -n 's/.*\[Requesting program interpreter: \(.*\)\]/\1/p'); \
++	[ "$$interp" = "$(TCC_ELFINTERP)" ] || { \
++		echo "error: tcc interpreter is '$$interp', expected $(TCC_ELFINTERP)" &gt;&amp;2; exit 1; }; \
++	! readelf -d rootfs/bin/tcc | grep -q 'libc\.so\.6\|ld-linux' || { \
++		echo "error: tcc is linked against glibc" &gt;&amp;2; exit 1; }; \
++	readelf -d rootfs/bin/tcc | grep -q '\[libc\.so\]' || { \
++		echo "error: tcc missing NEEDED libc.so (musl)" &gt;&amp;2; exit 1; }; \
++	chroot $(CURDIR)/rootfs /bin/tcc -vv 2&gt;&amp;1 | grep -q '$(TCC_ELFINTERP)' || { \
++		echo "error: tcc -vv does not report elfinterp $(TCC_ELFINTERP)" &gt;&amp;2; exit 1; }; \
++	echo "tcc ok: interp=$$interp dynamic musl"
++
++rootfs/bin/cc: rootfs/bin/tcc
++	ln -sfn tcc $@
++
++rootfs/bin/ar: rootfs/bin/tcc
++	printf '%s\n' '#!/bin/sh' 'tcc -ar "$$@"' &gt; $@
++	chmod +x $@
+ 
+-rootfs/lib/libwolfssl.a: rootfs/bin/cc build/wolfssl-$(WOLFSSLVER)/configure
++rootfs/bin/ranlib: rootfs/bin/tcc
++	printf '%s\n' '#!/bin/sh' 'exec true' &gt; $@
++	chmod +x $@
++
++rootfs/lib/libwolfssl.a: rootfs/bin/tcc build/wolfssl-$(WOLFSSLVER)/configure
+ 	@echo "==&gt; wolfssl"
+ 	cd build/wolfssl-$(WOLFSSLVER) &amp;&amp; ./configure --prefix=$(CURDIR)/rootfs \
+ 		--host=x86_64-linux-gnu --target=x86_64-linux-musl --enable-opensslextra
+@@ -313,20 +350,17 @@ ifeq ($(PLATFORM),radxacm5io)
+ rootfs/boot/Image rootfs/boot/$(RADXA_DTB) $(LINUX_HEADERS): configs/radxacm5io-linux.config \
+ 		rootfs/bin/musl-gcc build/linux-src/.lin0-patched
+ 	@echo "==&gt; linux (radxacm5io)"
+-	mkdir -p build/dtbs build/kheaders build/kheaders-staging \
+-		rootfs/boot rootfs/usr/include rootfs/include/linux
+-	cd build/linux-src &amp;&amp; cp $(CURDIR)/configs/radxacm5io-linux.config .config
++	mkdir -p build/dtbs rootfs/boot
++	cp -f $(CURDIR)/configs/radxacm5io-linux.config build/linux-src/.config
+ 	$(MAKE) -C build/linux-src ARCH=arm64 olddefconfig
+ 	$(MAKE) -C build/linux-src ARCH=arm64 -j$$(nproc) Image modules dtbs
+-	INSTALL_MOD_PATH=$(CURDIR)/rootfs $(MAKE) -C build/linux-src ARCH=arm64 modules_install
++	$(MAKE) -C build/linux-src ARCH=arm64 \
++		INSTALL_MOD_PATH=$(CURDIR)/rootfs \
++		INSTALL_HDR_PATH=$(CURDIR)/rootfs \
++		modules_install headers_install
+ 	cp -f build/linux-src/arch/arm64/boot/Image rootfs/boot/Image
+-	cp -f build/linux-src/arch/arm64/boot/dts/rockchip/$(RADXA_DTB) rootfs/boot/$(RADXA_DTB)
+-	cp -f build/linux-src/arch/arm64/boot/dts/rockchip/$(RADXA_DTB) build/dtbs/
+-	$(MAKE) -C build/linux-src ARCH=arm64 headers_install
+-	cp -f build/linux-src/usr/include/linux/version.h rootfs/include/linux/version.h
+-	cd build/linux-src/usr/include &amp;&amp; tar cf - . | tar xf - -C $(CURDIR)/rootfs/usr/include
+-	rm -rf build/kheaders &amp;&amp; mkdir -p build/kheaders
+-	cd build/linux-src/usr/include &amp;&amp; tar cf - . | tar xf - -C $(CURDIR)/build/kheaders
++	cp -f build/linux-src/arch/arm64/boot/dts/rockchip/$(RADXA_DTB) \
++		rootfs/boot/$(RADXA_DTB) build/dtbs/
+ 	strings rootfs/boot/$(RADXA_DTB) | grep -q haoyu,hym8563
+ 
+ else ifeq ($(PLATFORM),rpizero)
+@@ -334,12 +368,13 @@ rootfs/boot/kernel.img $(LINUX_HEADERS): configs/rpizero-linux.config \
+ 		rootfs/bin/musl-gcc build/linux-$(LINUXVER)/Makefile
+ 	@echo "==&gt; linux (rpizero)"
+ 	mkdir -p rootfs/boot
+-	cp configs/rpizero-linux.config build/linux-$(LINUXVER)/.config
+-	CC=$(CURDIR)/rootfs/bin/musl-gcc ARCH=arm $(MAKE) -C build/linux-$(LINUXVER) olddefconfig
+-	CC=$(CURDIR)/rootfs/bin/musl-gcc ARCH=arm $(MAKE) -C build/linux-$(LINUXVER)
+-	CC=$(CURDIR)/rootfs/bin/musl-gcc ARCH=arm INSTALL_HDR_PATH=$(CURDIR)/rootfs \
+-		INSTALL_PATH=$(CURDIR)/rootfs/boot INSTALL_MOD_PATH=$(CURDIR)/rootfs \
+-		$(MAKE) -C build/linux-$(LINUXVER) zImage dtbs modules headers_install modules_install
++	cp -f configs/rpizero-linux.config build/linux-$(LINUXVER)/.config
++	$(MAKE) -C build/linux-$(LINUXVER) ARCH=arm CC=$(PLAT_CC) olddefconfig
++	$(MAKE) -C build/linux-$(LINUXVER) ARCH=arm CC=$(PLAT_CC) \
++		INSTALL_HDR_PATH=$(CURDIR)/rootfs \
++		INSTALL_PATH=$(CURDIR)/rootfs/boot \
++		INSTALL_MOD_PATH=$(CURDIR)/rootfs \
++		zImage dtbs modules headers_install modules_install
+ 	cp -f build/linux-$(LINUXVER)/arch/arm/boot/zImage rootfs/boot/kernel.img
+ 	-cp -f build/linux-$(LINUXVER)/arch/arm/boot/dts/broadcom/bcm2835-rpi-zero*.dtb rootfs/boot/
+ 	-cp -f build/linux-$(LINUXVER)/arch/arm/boot/dts/bcm2835-rpi-zero*.dtb rootfs/boot/
+@@ -348,12 +383,13 @@ else
+ rootfs/boot/vmlinuz $(LINUX_HEADERS): configs/$(PLATFORM)-linux.config \
+ 		rootfs/bin/musl-gcc build/linux-$(LINUXVER)/Makefile
+ 	@echo "==&gt; linux ($(PLATFORM))"
+-	cp configs/$(PLATFORM)-linux.config build/linux-$(LINUXVER)/.config
+-	CC=$(CURDIR)/rootfs/bin/musl-gcc $(MAKE) -C build/linux-$(LINUXVER) olddefconfig
+-	CC=$(CURDIR)/rootfs/bin/musl-gcc $(MAKE) -C build/linux-$(LINUXVER)
+-	CC=$(CURDIR)/rootfs/bin/musl-gcc INSTALL_HDR_PATH=$(CURDIR)/rootfs INSTALL_PATH=$(CURDIR)/rootfs/boot \
++	cp -f configs/$(PLATFORM)-linux.config build/linux-$(LINUXVER)/.config
++	$(MAKE) -C build/linux-$(LINUXVER) CC=$(PLAT_CC) olddefconfig
++	$(MAKE) -C build/linux-$(LINUXVER) CC=$(PLAT_CC) \
++		INSTALL_HDR_PATH=$(CURDIR)/rootfs \
++		INSTALL_PATH=$(CURDIR)/rootfs/boot \
+ 		INSTALL_MOD_PATH=$(CURDIR)/rootfs \
+-		$(MAKE) -C build/linux-$(LINUXVER) install headers_install modules_install
++		install headers_install modules_install
+ endif
+ 
+ # --- skeleton / post-install ------------------------------------------------
+@@ -381,10 +417,13 @@ skeleton_for = $(or $(SKELETON_$(1)),$(SKELETON_))
+ 
+ define POST_INSTALL_RULE
+ .PHONY: post-install-$(1)
+-post-install-$(1): $$(call skeleton_for,$(1)) $$(call post_extra,$(1))
++post-install-$(1): $$(call skeleton_for,$(1)) $$(call post_extra,$(1)) rootfs-home-pkg
+ 	@echo "==&gt; post-install ($(1))"
+ 	$(if $(wildcard scripts/post-install-$(1).sh),cd build &amp;&amp; export outdir=$(CURDIR)/rootfs PLATFORM=$(1) linuxver=$(LINUXVER) linux_src=$(CURDIR)/build/linux-$(LINUXVER) &amp;&amp; . $(CURDIR)/scripts/post-install-$(1).sh)
+ 	$(if $(POST_TARGET_$(1)),$$(MAKE) $(POST_TARGET_$(1)))
++	@$(MAKE) rootfs-home-pkg
++	rm -f rootfs/bin/musl-gcc rootfs/lib/musl-gcc.specs \
++		rootfs/lib/ld-linux-$(MUSL_ARCH).so.1
+ 	-command -v sudo &gt;/dev/null &amp;&amp; sudo scripts/umounts.sh &gt;/dev/null || true
+ endef
+ $(foreach p,$(PLATFORMS),$(eval $(call POST_INSTALL_RULE,$(p))))
+@@ -416,7 +455,7 @@ define PLAT_RULE
+ $(1): rootfs-$(1).tar.xz
+ 
+ rootfs-$(1).tar.xz: force-platform-$(1) configs/$(1)-linux.config configs/$(1)-toybox.config \
+-		rootfs/bin/init $(ROOTFS_ETC)
++		rootfs/bin/init $(ROOTFS_ETC) rootfs-home-pkg
+ 	@echo "==&gt; tar rootfs-$(1).tar.xz"
+ 	cd rootfs &amp;&amp; tar cfJ $(CURDIR)/rootfs-$(1).tar.xz .
+ 	@echo "Build complete: rootfs-$(1).tar.xz"
+@@ -424,6 +463,7 @@ rootfs-$(1).tar.xz: force-platform-$(1) configs/$(1)-linux.config configs/$(1)-t
+ .PHONY: force-platform-$(1)
+ force-platform-$(1):
+ 	$(if $(run_platform_$(1)),$(run_platform_$(1)),@$(MAKE) PLATFORM=$(1) post-install-$(1))
++	@$(MAKE) rootfs-home-pkg
+ endef
+ $(foreach p,$(filter-out radxacm5io,$(PLATFORMS)),$(eval $(call PLAT_RULE,$(p))))
+ 
+@@ -469,9 +509,11 @@ radxacm5io-bootfiles: rootfs/boot/extlinux/extlinux.conf \
+ 	rootfs/lib/firmware/regulatory.db $(RTL_FW_DST)
+ 
+ .PHONY: radxacm5io-postinstall
+-radxacm5io-postinstall: skeleton radxacm5io-bootfiles
++radxacm5io-postinstall: skeleton radxacm5io-bootfiles rootfs-home-pkg \
++		$(LINUX_HEADERS) rootfs/bin/toybox rootfs/bin/tcc $(ROOTFS_TLS_LIBS)
+ 	@echo "==&gt; [radxacm5io] post-install"
+-	@ls -lh rootfs/bin/toybox $(ROOTFS_TLS_LIBS)
++	@ls -lh rootfs/bin/toybox rootfs/bin/tcc $(ROOTFS_TLS_LIBS)
++	@ls -lh $(ROOTFS_PKG) 2&gt;/dev/null || true
+ 
+ # Build the arm64 toolchain image from an inline Dockerfile (Docker layer-caches repeats).
+ .PHONY: radxacm5io-builder
+@@ -525,8 +567,11 @@ radxacm5io-img: $(RADXA_OFFICIAL) radxacm5io-rootfs
+ 		'mkfs.ext4 -F -L "$$ROOT_LABEL" -U "$$ROOT_UUID" "$$LOOP"' \
+ 		'mount "$$LOOP" "$$MNT"' \
+ 		'rsync -aH "$$ROOTFS"/ "$$MNT"/' \
+-		'if [ -f "$$MNT/lib/libc.so" ]; then chmod 755 "$$MNT/lib/libc.so"; ln -sfn libc.so "$$MNT/lib/ld-musl-aarch64.so.1"; fi' \
++		'chmod 755 "$$MNT/lib/libc.so"' \
++		'ln -sfn libc.so "$$MNT/lib/ld-musl-aarch64.so.1"' \
++		'rm -f "$$MNT/lib/ld-linux-aarch64.so.1" "$$MNT/lib/ld-linux-x86_64.so.2" "$$MNT/lib/ld-linux.so.2" "$$MNT/lib/ld-linux-armhf.so.3"' \
+ 		'mkdir -p "$$MNT/bin" "$$MNT/boot/extlinux" "$$MNT/proc" "$$MNT/sys" "$$MNT/dev" "$$MNT/tmp" "$$MNT/run"' \
++		'chmod 1777 "$$MNT/tmp"' \
+ 		'install -m 0755 /work/init "$$MNT/bin/init"' \
+ 		'install -m 0644 "$$ROOTFS/boot/Image" "$$MNT/boot/Image"' \
+ 		'install -m 0644 "$$ROOTFS/boot/$(RADXA_DTB)" "$$MNT/boot/$(RADXA_DTB)"' \
+@@ -580,7 +625,7 @@ mount-rootfs:
+ 
+ clean: umount-rootfs
+ 	rm -rf rootfs build/tls-include
+-	rm -f rootfs-*.tar.xz build/cacert.pem build/cacert.pem.tmp*
++	rm -f rootfs-*.tar.xz lin0-*.img lin0-*.tar.xz build/cacert.pem build/cacert.pem.tmp*
+ 
+ distclean: umount-rootfs
+ 	rm -rf build rootfs
+diff --git a/README.md b/README.md
+index 17e3235..32565d5 100644
+--- a/README.md
++++ b/README.md
+@@ -198,13 +198,29 @@ vi /etc/resolv.conf
+ 
+ ### Users
+ 
++lin0 ships as a single-user system (root only). Toybox `useradd` /
++`adduser` are not built in; add accounts by hand.
++
++On a running system, as root:
++
+ ```sh
+-adduser myuser
++# primary group (gid 100 is already in /etc/group as "users")
++echo 'myuser::1000:100:myuser:/home/myuser:/bin/sh' &gt;&gt; /etc/passwd
++mkdir -p /home/myuser
++chown 1000:100 /home/myuser
+ passwd myuser
+ ```
+ 
+-Or edit `etc/passwd` / `etc/shells` in the tree and create the home directory
+-before rebuilding. Lock down root with `passwd` after first boot.
++Then `su - myuser` or log in as `myuser` at the getty prompt.
++
++Passwords live in `/etc/passwd` (there is no `/etc/shadow`). `passwd`
++updates that file. Use a free uid (1000+) and an existing gid from
++`/etc/group` (default `users` is 100). Shell must be listed in
++`/etc/shells` (default `/bin/sh`).
++
++To bake a user into the image, edit `etc/passwd` and `etc/group` in the
++tree, create the home directory under `rootfs/home/`, then rebuild.
++Lock down root with `passwd` after first boot.
+ 
+ ### Extra software
+ 
+diff --git a/configs/hpelitedesk-toybox.config b/configs/hpelitedesk-toybox.config
+index c39d490..f33aa7f 100644
+--- a/configs/hpelitedesk-toybox.config
++++ b/configs/hpelitedesk-toybox.config
+@@ -324,7 +324,7 @@ CONFIG_WGET_LIBTLS=y
+ #
+ CONFIG_DMESG=y
+ CONFIG_GZIP=y
+-# CONFIG_GUNZIP is not set
++CONFIG_GUNZIP=y
+ # CONFIG_ZCAT is not set
+ # CONFIG_HOSTNAME is not set
+ # CONFIG_DNSDOMAINNAME is not set
+diff --git a/configs/m1mac-toybox.config b/configs/m1mac-toybox.config
+index c39d490..f33aa7f 100644
+--- a/configs/m1mac-toybox.config
++++ b/configs/m1mac-toybox.config
+@@ -324,7 +324,7 @@ CONFIG_WGET_LIBTLS=y
+ #
+ CONFIG_DMESG=y
+ CONFIG_GZIP=y
+-# CONFIG_GUNZIP is not set
++CONFIG_GUNZIP=y
+ # CONFIG_ZCAT is not set
+ # CONFIG_HOSTNAME is not set
+ # CONFIG_DNSDOMAINNAME is not set
+diff --git a/configs/pinebookpro-toybox.config b/configs/pinebookpro-toybox.config
+index c39d490..f33aa7f 100644
+--- a/configs/pinebookpro-toybox.config
++++ b/configs/pinebookpro-toybox.config
+@@ -324,7 +324,7 @@ CONFIG_WGET_LIBTLS=y
+ #
+ CONFIG_DMESG=y
+ CONFIG_GZIP=y
+-# CONFIG_GUNZIP is not set
++CONFIG_GUNZIP=y
+ # CONFIG_ZCAT is not set
+ # CONFIG_HOSTNAME is not set
+ # CONFIG_DNSDOMAINNAME is not set
+diff --git a/configs/x86_64-toybox.config b/configs/x86_64-toybox.config
+index c39d490..f33aa7f 100644
+--- a/configs/x86_64-toybox.config
++++ b/configs/x86_64-toybox.config
+@@ -324,7 +324,7 @@ CONFIG_WGET_LIBTLS=y
+ #
+ CONFIG_DMESG=y
+ CONFIG_GZIP=y
+-# CONFIG_GUNZIP is not set
++CONFIG_GUNZIP=y
+ # CONFIG_ZCAT is not set
+ # CONFIG_HOSTNAME is not set
+ # CONFIG_DNSDOMAINNAME is not set
+diff --git a/etc/group b/etc/group
+new file mode 100644
+index 0000000..2f0f5e7
+--- /dev/null
++++ b/etc/group
+@@ -0,0 +1,4 @@
++root:x:0:
++users:x:100:
++video:x:44:
++input:x:45:
+diff --git a/etc/hosts b/etc/hosts
+new file mode 100644
+index 0000000..421daf0
+--- /dev/null
++++ b/etc/hosts
+@@ -0,0 +1,2 @@
++127.0.0.1	localhost lin0
++::1		localhost ip6-localhost ip6-loopback
+diff --git a/init b/init
+index 1d94ee9..757aa6e 100755
+--- a/init
++++ b/init
+@@ -13,9 +13,14 @@ dmesg -n 1
+ mount -t sysfs sysfs /sys
+ mount -t tmpfs tmpfs /run
+ mount -t tmpfs tmpfs /var/run
++# world-writable sticky; configure scripts and shells need this
++mount -t tmpfs -o mode=1777 tmpfs /tmp
+ mount -t devtmpfs devtmpfs /dev
+ mount -t vfat /dev/mmcblk0p1 /boot
+ 
++# kernel utsname; /etc/hostname alone is not enough for gethostname()
++[ -s /etc/hostname ] &amp;&amp; hostname -F /etc/hostname
++
+ modprobe hid_apple
+ modprobe realtek
+ modprobe rtl8150
+diff --git a/patches/linux-radxacm5io-0001-add-hym8563-rtc.patch b/patches/linux-radxacm5io-0001-add-hym8563-rtc.patch
+index d75e71b..d92cadb 100644
+--- a/patches/linux-radxacm5io-0001-add-hym8563-rtc.patch
++++ b/patches/linux-radxacm5io-0001-add-hym8563-rtc.patch
+@@ -1,7 +1,8 @@
+-From 8841981021b5f98522ad44fe40e11d0c0e756534 Mon Sep 17 00:00:00 2001
++From bc1f8164d6b8600a8e9d8f8daa767e96c6d227d4 Mon Sep 17 00:00:00 2001
+ From: Brian Mayer &lt;bleemayer@gmail.com&gt;
+ Date: Thu, 2 Jul 2026 14:51:51 -0300
+-Subject: [PATCH] arm64: dts: rockchip: add HYM8563 RTC to Radxa CM5 IO board
++Subject: [PATCH v2] arm64: dts: rockchip: add HYM8563 RTC to Radxa CM5 IO
++ board
+ 
+ The Radxa CM5 IO carrier has a Haoyu HYM8563 real-time clock on I2C6 at
+ address 0x51, with its interrupt line on GPIO0_B0 and a CR1220 backup
+@@ -10,16 +11,23 @@ when CONFIG_RTC_DRV_HYM8563 is enabled.
+ 
+ Describe the RTC, wire the interrupt pin with a pull-up, mark it as a
+ wakeup source, and point the rtc0 alias at it so RTC_HCTOSYS/SYSTOHC use
+-the external clock. Wiring matches Radxa's downstream board support.
++the external clock. Wiring matches Radxa's downstream board support and
++uses schematic names for the rtc_int_l pinctrl entry.
+ 
++Assisted-by: Grok:grok-build
+ Signed-off-by: Brian Mayer &lt;bleemayer@gmail.com&gt;
+-Tested-by: Brian Mayer &lt;bleemayer@gmail.com&gt;
+ ---
+  .../dts/rockchip/rk3588s-radxa-cm5-io.dts     | 19 +++++++++++++++++++
+  1 file changed, 19 insertions(+)
+ 
++Changes in v2:
++- Rename pinctrl to rtc_int_l / rtc-int-l to match schematics
++- Drop Tested-by (covered by Signed-off-by)
++- Add Assisted-by: Grok:grok-build
++- Send inline with git send-email (not as attachment)
++
+ diff --git a/arch/arm64/boot/dts/rockchip/rk3588s-radxa-cm5-io.dts b/arch/arm64/boot/dts/rockchip/rk3588s-radxa-cm5-io.dts
+-index af4a9bc01..1a2c72831 100644
++index af4a9bc01..d22db4d18 100644
+ --- a/arch/arm64/boot/dts/rockchip/rk3588s-radxa-cm5-io.dts
+ +++ b/arch/arm64/boot/dts/rockchip/rk3588s-radxa-cm5-io.dts
+ @@ -19,6 +19,7 @@ / {
+@@ -43,7 +51,7 @@ index af4a9bc01..1a2c72831 100644
+ +		interrupt-parent = &lt;&amp;gpio0&gt;;
+ +		interrupts = &lt;RK_PB0 IRQ_TYPE_LEVEL_LOW&gt;;
+ +		pinctrl-names = "default";
+-+		pinctrl-0 = &lt;&amp;rtc_int&gt;;
+++		pinctrl-0 = &lt;&amp;rtc_int_l&gt;;
+ +		wakeup-source;
+ +	};
+  };
+@@ -54,7 +62,7 @@ index af4a9bc01..1a2c72831 100644
+  	};
+  
+ +	hym8563 {
+-+		rtc_int: rtc-int {
+++		rtc_int_l: rtc-int-l {
+ +			rockchip,pins = &lt;0 RK_PB0 RK_FUNC_GPIO &amp;pcfg_pull_up&gt;;
+ +		};
+ +	};
+diff --git a/patches/upstream/0001-arm64-dts-rockchip-add-HYM8563-RTC-to-Radxa-CM5-IO-b.patch b/patches/upstream/0001-arm64-dts-rockchip-add-HYM8563-RTC-to-Radxa-CM5-IO-b.patch
+index d75e71b..f11f6cf 100644
+--- a/patches/upstream/0001-arm64-dts-rockchip-add-HYM8563-RTC-to-Radxa-CM5-IO-b.patch
++++ b/patches/upstream/0001-arm64-dts-rockchip-add-HYM8563-RTC-to-Radxa-CM5-IO-b.patch
+@@ -1,7 +1,12 @@
+-From 8841981021b5f98522ad44fe40e11d0c0e756534 Mon Sep 17 00:00:00 2001
++From bc1f8164d6b8600a8e9d8f8daa767e96c6d227d4 Mon Sep 17 00:00:00 2001
+ From: Brian Mayer &lt;bleemayer@gmail.com&gt;
+ Date: Thu, 2 Jul 2026 14:51:51 -0300
+-Subject: [PATCH] arm64: dts: rockchip: add HYM8563 RTC to Radxa CM5 IO board
++Subject: [PATCH v2] arm64: dts: rockchip: add HYM8563 RTC to Radxa CM5 IO
++ board
++
++Hello again, to clarify: I tested the v1 patch in my radxa cm5, but since
++this v2 only contains name changes I didn't test. I added the missing
++agent tag and am sending the patch inline. Thanks.
+ 
+ The Radxa CM5 IO carrier has a Haoyu HYM8563 real-time clock on I2C6 at
+ address 0x51, with its interrupt line on GPIO0_B0 and a CR1220 backup
+@@ -10,16 +15,23 @@ when CONFIG_RTC_DRV_HYM8563 is enabled.
+ 
+ Describe the RTC, wire the interrupt pin with a pull-up, mark it as a
+ wakeup source, and point the rtc0 alias at it so RTC_HCTOSYS/SYSTOHC use
+-the external clock. Wiring matches Radxa's downstream board support.
++the external clock. Wiring matches Radxa's downstream board support and
++uses schematic names for the rtc_int_l pinctrl entry.
+ 
++Assisted-by: Grok:grok-build
+ Signed-off-by: Brian Mayer &lt;bleemayer@gmail.com&gt;
+-Tested-by: Brian Mayer &lt;bleemayer@gmail.com&gt;
+ ---
+  .../dts/rockchip/rk3588s-radxa-cm5-io.dts     | 19 +++++++++++++++++++
+  1 file changed, 19 insertions(+)
+ 
++Changes in v2:
++- Rename pinctrl to rtc_int_l / rtc-int-l to match schematics
++- Drop Tested-by (covered by Signed-off-by)
++- Add Assisted-by: Grok:grok-build
++- Send inline with git send-email (not as attachment)
++
+ diff --git a/arch/arm64/boot/dts/rockchip/rk3588s-radxa-cm5-io.dts b/arch/arm64/boot/dts/rockchip/rk3588s-radxa-cm5-io.dts
+-index af4a9bc01..1a2c72831 100644
++index af4a9bc01..d22db4d18 100644
+ --- a/arch/arm64/boot/dts/rockchip/rk3588s-radxa-cm5-io.dts
+ +++ b/arch/arm64/boot/dts/rockchip/rk3588s-radxa-cm5-io.dts
+ @@ -19,6 +19,7 @@ / {
+@@ -43,7 +55,7 @@ index af4a9bc01..1a2c72831 100644
+ +		interrupt-parent = &lt;&amp;gpio0&gt;;
+ +		interrupts = &lt;RK_PB0 IRQ_TYPE_LEVEL_LOW&gt;;
+ +		pinctrl-names = "default";
+-+		pinctrl-0 = &lt;&amp;rtc_int&gt;;
+++		pinctrl-0 = &lt;&amp;rtc_int_l&gt;;
+ +		wakeup-source;
+ +	};
+  };
+@@ -54,7 +66,7 @@ index af4a9bc01..1a2c72831 100644
+  	};
+  
+ +	hym8563 {
+-+		rtc_int: rtc-int {
+++		rtc_int_l: rtc-int-l {
+ +			rockchip,pins = &lt;0 RK_PB0 RK_FUNC_GPIO &amp;pcfg_pull_up&gt;;
+ +		};
+ +	};
+diff --git a/patches/upstream/cover-letter.txt b/patches/upstream/cover-letter.txt
+index ddfbd15..7d8c32b 100644
+--- a/patches/upstream/cover-letter.txt
++++ b/patches/upstream/cover-letter.txt
+@@ -1,8 +1,3 @@
+-Hi kernel team.
+-
+-I was testing building the kernel for my radxa cm5+io shield, and turns
+-out there is no rtc in the DTS, so i got it from the radxa files.
+-This is my first email to you, please help me correct it if something is
+-off the standards.
+-
+-Best, Brian
++Hello again, to clarify: I tested the v1 patch in my radxa cm5, but since
++this v2 only contains name changes I didn't test. I added the missing
++agent tag and am sending the patch inline. Thanks.
+diff --git a/pkg/.gitkeep b/pkg/.gitkeep
+new file mode 100644
+index 0000000..e69de29
+diff --git a/scripts/make-target.sh b/scripts/make-target.sh
+index 91c85d4..5ffad3a 100755
+--- a/scripts/make-target.sh
++++ b/scripts/make-target.sh
+@@ -13,13 +13,21 @@ cd /tmp/tinycc
+ 
+ ./configure --prefix=/ \
+ 	--cc=tcc \
++	--extra-ldflags='-Wl,-dynamic-linker,/lib/ld-musl-aarch64.so.1' \
+ 	--sysincludepaths=/include \
+ 	--config-musl \
+ 	--libpaths=/lib \
+-	--elfinterp=/lib/libc.so \
++	--elfinterp=/lib/ld-musl-aarch64.so.1 \
+ 	--crtprefix=/lib \
+ 	--tccdir=/lib \
+ 	--config-bcheck=no
++# Ensure dynamic musl link (configure may default LDFLAGS=-static for *gcc* names).
++sed -i 's|^LDFLAGS=.*|LDFLAGS=-Wl,-dynamic-linker,/lib/ld-musl-aarch64.so.1|' config.mak
+ make &amp;&amp; make install
+-mv /bin/tcc /bin/cc
++# Keep argv0 as tcc so libtool matches tcc*); POSIX cc is a symlink.
++ln -sfn tcc /bin/cc
++ln -sfn libc.so /lib/ld-musl-aarch64.so.1
++printf '%s\n' '#!/bin/sh' 'tcc -ar "$@"' &gt; /bin/ar
++printf '%s\n' '#!/bin/sh' 'exec true' &gt; /bin/ranlib
++chmod +x /bin/ar /bin/ranlib
+ cd ..
+diff --git a/www/index.html b/www/index.html
+index 160247a..0e2553a 100644
+--- a/www/index.html
++++ b/www/index.html
+@@ -149,6 +149,10 @@ want to give you a default. hence, you need to:
+ 
+ the rest is up to you. welcome to lin0!
+ 
++see the &lt;a href=wiki.html&gt;wiki&lt;/a&gt; for adding users,
++shell history, passwords, building bgce/bgtk, and
++related hints.
++
+ 
+ &lt;b&gt;getting help&lt;/b&gt;
+ 
+@@ -157,8 +161,8 @@ an email to:
+ 
+ lin0 AT terminal DOT pink
+ 
+-i plan to create a wiki to let users contribute
+-easily.
++the &lt;a href=wiki.html&gt;wiki&lt;/a&gt; collects practical setup
++notes; more pages welcome.
+ 
+ 
+ &lt;b&gt;license&lt;/b&gt;
+diff --git a/www/wiki.html b/www/wiki.html
+new file mode 100644
+index 0000000..1ec90a6
+--- /dev/null
++++ b/www/wiki.html
+@@ -0,0 +1,436 @@
++&lt;!DOCTYPE html&gt;
++&lt;meta name="viewport" content="width=device-width, initial-scale=1" /&gt;
++&lt;title&gt;lin0 wiki&lt;/title&gt;
++&lt;meta name="color-scheme" content="light dark"&gt;
++&lt;link rel=icon href=data:,&gt;
++&lt;style&gt;pre{width:52ch;margin:2ch auto}a{color:#ff00ff}&lt;/style&gt;
++&lt;pre&gt;
++&lt;a href=index.html&gt;lin0&lt;/a&gt; / &lt;b&gt;wiki&lt;/b&gt;
++
++
++hints for living on a bare system. edit the source
++tree under &lt;i&gt;etc/&lt;/i&gt; before rebuild, or change files
++on a running box as root. includes notes on building
++extra software such as bgce and bgtk.
++
++
++&lt;b&gt;contents&lt;/b&gt;
++
++- &lt;a href=#login&gt;login&lt;/a&gt;
++- &lt;a href=#users&gt;users&lt;/a&gt;
++- &lt;a href=#history&gt;shell history&lt;/a&gt;
++- &lt;a href=#hostname&gt;hostname&lt;/a&gt;
++- &lt;a href=#tmp&gt;/tmp&lt;/a&gt;
++- &lt;a href=#network&gt;networking&lt;/a&gt;
++- &lt;a href=#passwd&gt;passwords&lt;/a&gt;
++- &lt;a href=#notes&gt;notes on su / getty&lt;/a&gt;
++- &lt;a href=#build&gt;building software&lt;/a&gt;
++- &lt;a href=#bgce&gt;bgce and bgtk&lt;/a&gt;
++
++
++&lt;a id=login&gt;&lt;/a&gt;&lt;b&gt;login&lt;/b&gt;
++
++after boot you get a getty on the console. default
++account:
++
++- user: root
++- password: lin0
++
++there is no systemd — init is a shell script that
++loops &lt;i&gt;getty&lt;/i&gt;, which runs &lt;i&gt;login&lt;/i&gt;. change the root
++password after first boot:
++
++	passwd
++
++
++&lt;a id=users&gt;&lt;/a&gt;&lt;b&gt;users&lt;/b&gt;
++
++lin0 ships as a single-user system (root only).
++toybox &lt;i&gt;useradd&lt;/i&gt; / &lt;i&gt;adduser&lt;/i&gt; are not built in; add
++accounts by hand.
++
++shipped files:
++
++- &lt;i&gt;/etc/passwd&lt;/i&gt; — accounts and password hashes
++- &lt;i&gt;/etc/group&lt;/i&gt; — groups (root:0, users:100,
++  video:44, input:45); member lists start empty
++- no &lt;i&gt;/etc/shadow&lt;/i&gt; — passwords live in passwd
++
++on a running system, as root:
++
++	# primary group: users (gid 100) from /etc/group
++	echo 'name::1000:100:name:/home/name:/bin/sh' 		&gt;&gt; /etc/passwd
++	mkdir -p /home/name
++	chown 1000:100 /home/name
++	passwd name
++
++	# supplementary groups (edit member list; leave
++	# empty until you add names):
++	#   video:x:44:
++	#   input:x:45:name
++	# append with sed, e.g. video for framebuffer:
++	sed -i 's/^video:x:44:$/video:x:44:name/' 		/etc/group
++	sed -i 's/^input:x:45:$/input:x:45:name/' 		/etc/group
++
++	# align device nodes if they are root:root 600
++	chown root:video /dev/fb0 &amp;&amp; chmod 660 /dev/fb0
++	chown root:input /dev/input/event*
++	chmod 660 /dev/input/event*
++
++then re-login so &lt;i&gt;id&lt;/i&gt; shows the new groups:
++
++	su - name
++
++or type the account name at the getty login prompt.
++
++rules of thumb:
++
++- pick a free uid (1000+)
++- primary gid from &lt;i&gt;/etc/group&lt;/i&gt; (users=100)
++- extra groups: comma-separated after the last colon
++  in &lt;i&gt;/etc/group&lt;/i&gt; (video=44, input=45)
++- shell must be in &lt;i&gt;/etc/shells&lt;/i&gt; (default /bin/sh)
++- home must exist and be owned by that uid:gid
++- group changes apply at next login
++
++to bake accounts into the image, edit &lt;i&gt;etc/passwd&lt;/i&gt;
++and &lt;i&gt;etc/group&lt;/i&gt; in the tree, create the home under
++&lt;i&gt;rootfs/home/&lt;/i&gt;, then rebuild.
++
++
++&lt;a id=history&gt;&lt;/a&gt;&lt;b&gt;shell history&lt;/b&gt;
++
++the login shell is &lt;b&gt;mksh&lt;/b&gt; (as /bin/sh). history is
++only in memory unless you set &lt;i&gt;HISTFILE&lt;/i&gt;.
++
++for a normal user, create startup files in their
++home (must be writable by that user).
++
++interactive shells source &lt;i&gt;~/.mkshrc&lt;/i&gt; (or $ENV):
++
++	cat &gt; /home/myuser/.mkshrc &lt;&lt;'EOT'
++	export HISTFILE=$HOME/.mksh_history
++	export HISTSIZE=2047
++	EOT
++	chown 1000:100 /home/myuser/.mkshrc
++
++login shells (getty/login, &lt;i&gt;su - user&lt;/i&gt;) also run
++&lt;i&gt;/etc/profile&lt;/i&gt; then &lt;i&gt;~/.profile&lt;/i&gt;. optional:
++
++	cat &gt; /home/myuser/.profile &lt;&lt;'EOT'
++	export HISTFILE=$HOME/.mksh_history
++	export HISTSIZE=2047
++	[ -r "$HOME/.mkshrc" ] &amp;&amp; . "$HOME/.mkshrc"
++	EOT
++	chown 1000:100 /home/myuser/.profile
++
++check:
++
++	su - myuser
++	echo $HISTFILE
++	# run a few commands, exit, log in again
++	fc -l
++	cat ~/.mksh_history
++
++notes:
++
++- default HISTSIZE is 2047 if unset; max 65535
++- same idea works for root under /home/root/
++- if HISTFILE is unset or empty, no file is used
++
++
++&lt;a id=hostname&gt;&lt;/a&gt;&lt;b&gt;hostname&lt;/b&gt;
++
++the name in &lt;i&gt;/etc/hostname&lt;/i&gt; is only a file until something
++calls &lt;i&gt;sethostname(2)&lt;/i&gt;. init does:
++
++	hostname -F /etc/hostname
++
++so &lt;i&gt;gethostname()&lt;/i&gt;, &lt;i&gt;uname -n&lt;/i&gt;, getty's prompt, and most
++programs see it. without that step the kernel name stays empty
++or (none) even though the file says lin0.
++
++change the name:
++
++	echo mybox &gt; /etc/hostname
++	hostname -F /etc/hostname
++
++also keep &lt;i&gt;/etc/hosts&lt;/i&gt; in sync if tools resolve the local
++name (sudo-like checks, some build systems, hostname -f):
++
++	127.0.0.1	localhost mybox
++	::1		localhost ip6-localhost ip6-loopback
++
++default image uses hostname &lt;i&gt;lin0&lt;/i&gt; in both files.
++
++
++&lt;a id=tmp&gt;&lt;/a&gt;&lt;b&gt;/tmp&lt;/b&gt;
++
++many tools (mksh here-docs, ./configure, compilers) create
++temporary files under &lt;i&gt;/tmp&lt;/i&gt;. that directory must be
++world-writable with the sticky bit:
++
++	# mode should be drwxrwxrwt (1777)
++	ls -ld /tmp
++
++if you see errors like:
++
++	cant create temporary file /tmp/....tmp: permission denied
++
++then either the directory is not 1777, or it was never
++mounted. on a running system (as root):
++
++	chmod 1777 /tmp
++	# or use a ram-backed tmp (preferred):
++	mount -t tmpfs -o mode=1777 tmpfs /tmp
++
++current lin0 init mounts tmpfs on /tmp with mode 1777 at
++boot. the rootfs skeleton also keeps /tmp as 1777 so it
++works even before that mount.
++
++
++&lt;a id=network&gt;&lt;/a&gt;&lt;b&gt;networking&lt;/b&gt;
++
++default dns ships in &lt;i&gt;etc/resolv.conf&lt;/i&gt;. on a
++running system:
++
++	vi /etc/resolv.conf
++
++install what you need on the target (for example
++wpa_supplicant for wi-fi). lin0 is a starting
++point, not a full desktop stack.
++
++
++&lt;a id=passwd&gt;&lt;/a&gt;&lt;b&gt;passwords&lt;/b&gt;
++
++the &lt;i&gt;passwd&lt;/i&gt; applet updates &lt;i&gt;/etc/passwd&lt;/i&gt; when the
++password field is not "x" (shadow placeholder).
++
++	passwd              # change your own
++	passwd myuser       # as root: set myuser
++
++there is no /etc/shadow in the default image.
++do not set the passwd field to a lone "x" unless
++you also create a proper shadow entry.
++
++
++&lt;a id=notes&gt;&lt;/a&gt;&lt;b&gt;notes on su / getty&lt;/b&gt;
++
++if non-root login or &lt;i&gt;su&lt;/i&gt; fails, check the account
++first — incomplete users are the usual cause.
++
++- getty does not force root; it prompts and runs
++  login with the name you type
++- as root, &lt;i&gt;su otheruser&lt;/i&gt; needs a valid passwd line
++  and a working shell path
++- non-root &lt;i&gt;su&lt;/i&gt; needs more: toybox setuid root and
++  (for toybox su) a modern hash in /etc/shadow —
++  the default image is not set up for that
++- missing home: login may warn and fall back to /
++
++
++&lt;a id=build&gt;&lt;/a&gt;&lt;b&gt;building software&lt;/b&gt;
++
++the on-box compiler is &lt;i&gt;/bin/tcc&lt;/i&gt;; &lt;i&gt;/bin/cc&lt;/i&gt; is a
++symlink to it. use &lt;i&gt;CC=/bin/tcc&lt;/i&gt; so libtool sees
++basename &lt;i&gt;tcc&lt;/i&gt; and fills in shared-link commands.
++there is no &lt;i&gt;/usr&lt;/i&gt;: put binaries in &lt;i&gt;/bin&lt;/i&gt;,
++libraries in &lt;i&gt;/lib&lt;/i&gt;, headers in &lt;i&gt;/include&lt;/i&gt;,
++data in &lt;i&gt;/share&lt;/i&gt;.
++
++	export PATH=/bin
++	export CC=/bin/tcc
++	export LD=/bin/tcc
++	export AR='/bin/tcc -ar'
++	export RANLIB=true
++
++configure scripts should get &lt;i&gt;--prefix=/&lt;/i&gt; so files
++land in those directories. &lt;i&gt;AR&lt;/i&gt; / &lt;i&gt;RANLIB&lt;/i&gt; matter:
++libtool calls them, and tcc archives use &lt;i&gt;tcc -ar&lt;/i&gt;
++with ranlib as a no-op. lin0 has no &lt;i&gt;pkg-config&lt;/i&gt;,
++so do not install &lt;i&gt;.pc&lt;/i&gt; files:
++
++	make install pkgconfigdir=/tmp/pc
++	rm -rf /tmp/pc /lib/pkgconfig
++
++prefer &lt;i&gt;.tar.gz&lt;/i&gt; sources (no &lt;i&gt;xz&lt;/i&gt; applet).
++&lt;i&gt;wget&lt;/i&gt; works; &lt;i&gt;git&lt;/i&gt; is not shipped. toybox
++&lt;i&gt;tar&lt;/i&gt; does not inflate gzip for you — decompress
++first, then extract:
++
++	gunzip make-4.4.1.tar.gz
++	tar xf make-4.4.1.tar
++	cd make-4.4.1
++
++we want &lt;b&gt;shared&lt;/b&gt; libs (&lt;i&gt;.so&lt;/i&gt;) in &lt;i&gt;/lib&lt;/i&gt;.
++for autotools packages that default to both, pass
++&lt;i&gt;--enable-shared --disable-static&lt;/i&gt; so libtool
++only builds &lt;i&gt;.so&lt;/i&gt; objects (avoids bogus
++&lt;i&gt;.lo&lt;/i&gt; errors with tcc). if a build fails
++halfway:
++
++	make distclean
++	rm -rf .libs objs/.libs
++	find . -name '*.lo' -delete
++
++then reconfigure with the same flags. if configure
++still rejects tcc, build that one binary elsewhere
++for aarch64/musl and copy the &lt;i&gt;.so&lt;/i&gt; and headers
++in. do not set &lt;i&gt;CC=/bin/cc&lt;/i&gt; for libtool-using
++packages — basename &lt;i&gt;cc&lt;/i&gt; leaves
++&lt;i&gt;archive_cmds&lt;/i&gt; empty even though the compiler
++is tcc.
++
++many tools need a writable &lt;i&gt;/tmp&lt;/i&gt; (see above) and
++enough space on the root partition — enlarge images
++or build on mounted storage when trees get big.
++
++
++&lt;a id=bgce&gt;&lt;/a&gt;&lt;b&gt;bgce and bgtk&lt;/b&gt;
++
++&lt;a href=//terminal.pink/bgce/&gt;bgce&lt;/a&gt; is a minimal
++framebuffer compositor; &lt;a href=//terminal.pink/bgtk/&gt;bgtk&lt;/a&gt;
++is its toolkit. build on the target after the notes in
++&lt;a href=#build&gt;building software&lt;/a&gt;. order matters:
++make, zlib, freetype, libxml2, a font, then bgce, then
++bgtk. no libdrm required (default backend is
++&lt;i&gt;/dev/fb0&lt;/i&gt;).
++
++stage work under &lt;i&gt;/home/root/src&lt;/i&gt;. hdmi and a usb
++keyboard/mouse should be attached:
++
++	ls -l /dev/fb0 /dev/input/event*
++
++&lt;i&gt;downloads&lt;/i&gt; (github mirrors redirect; wget follows):
++
++- &lt;a href=https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz&gt;make-4.4.1.tar.gz&lt;/a&gt;
++- &lt;a href=https://zlib.net/zlib-1.3.1.tar.gz&gt;zlib-1.3.1.tar.gz&lt;/a&gt;
++- &lt;a href=https://download.savannah.gnu.org/releases/freetype/freetype-2.13.3.tar.gz&gt;freetype-2.13.3.tar.gz&lt;/a&gt;
++- &lt;a href=https://download.gnome.org/sources/libxml2/2.13/libxml2-2.13.5.tar.gz&gt;libxml2-2.13.5.tar.gz&lt;/a&gt;
++- dejavu sans: copy &lt;i&gt;DejaVuSans.ttf&lt;/i&gt; from another
++  machine if needed
++- &lt;a href=https://github.com/blmayer/bgce/archive/refs/heads/main.tar.gz&gt;bgce main.tar.gz&lt;/a&gt;
++  (image ships a fbdev-default snapshot as
++  &lt;i&gt;bgce-main.tar.gz&lt;/i&gt; in &lt;i&gt;/home/root&lt;/i&gt;)
++- &lt;a href=https://github.com/blmayer/bgtk/archive/refs/heads/main.tar.gz&gt;bgtk main.tar.gz&lt;/a&gt;
++
++&lt;i&gt;make&lt;/i&gt; (bootstrap if the image lacks /bin/make):
++
++	gunzip make-4.4.1.tar.gz
++	tar xf make-4.4.1.tar
++	cd make-4.4.1
++	./configure --prefix=/ CC=/bin/tcc
++	./build.sh
++	./make install
++	cd ..
++
++&lt;i&gt;zlib&lt;/i&gt;, &lt;i&gt;freetype&lt;/i&gt;, &lt;i&gt;libxml2&lt;/i&gt; (release
++tarballs ship configure). keep the exports from
++&lt;a href=#build&gt;building software&lt;/a&gt;:
++
++	gunzip zlib-1.3.1.tar.gz
++	tar xf zlib-1.3.1.tar
++	cd zlib-1.3.1
++	./configure --prefix=/ --shared
++	make
++	make install pkgconfigdir=/tmp/pc
++	rm -rf /tmp/pc
++	cd ..
++
++	gunzip freetype-2.13.3.tar.gz
++	tar xf freetype-2.13.3.tar
++	cd freetype-2.13.3
++	./configure --prefix=/ \
++		--enable-shared --disable-static
++	grep '^archive_cmds=' builds/unix/libtool
++	# with CC=/bin/tcc this should be non-empty
++	make
++	ls objs/.libs/libfreetype.so.6.20.2
++	make install pkgconfigdir=/tmp/pc
++	rm -rf /tmp/pc /lib/pkgconfig
++	cd ..
++
++	gunzip libxml2-2.13.5.tar.gz
++	tar xf libxml2-2.13.5.tar
++	cd libxml2-2.13.5
++	./configure --prefix=/ \
++		--enable-shared --disable-static \
++		--without-python
++	make
++	make install pkgconfigdir=/tmp/pc
++	rm -rf /tmp/pc
++	cd ..
++
++python is only for optional bindings (on by
++default). &lt;i&gt;--without-python&lt;/i&gt; builds
++&lt;i&gt;libxml2.so&lt;/i&gt; / &lt;i&gt;xmllint&lt;/i&gt; with no
++interpreter. lin0 has no python.
++
++&lt;i&gt;font&lt;/i&gt;:
++
++	mkdir -p /share/fonts/truetype/dejavu
++	cp DejaVuSans.ttf \
++		/share/fonts/truetype/dejavu/
++
++bgtk also reads &lt;i&gt;~/.config/bgtk.conf&lt;/i&gt; if you want to
++pin the path.
++
++&lt;i&gt;bgce&lt;/i&gt; (installs to /bin, /lib, /include). save
++the github archive as &lt;i&gt;bgce-main.tar.gz&lt;/i&gt;:
++
++	gunzip bgce-main.tar.gz
++	tar xf bgce-main.tar
++	cd bgce-main
++	make CC=/bin/tcc          # /dev/fb0, no libdrm
++	# make CC=/bin/tcc BACKEND=drm   # optional
++	make install
++	cd ..
++
++	bgce &amp;
++	# log: ~/.cache/bgce/bgce.log
++	# quit: ctrl+alt+q
++
++optional &lt;i&gt;~/.config/bgce.conf&lt;/i&gt;:
++
++	[background]
++	type = color
++	color = #336699
++
++	[shortcuts]
++	ctrl+alt+q = builtin:exit
++	sysrq = builtin:screenshot
++
++&lt;i&gt;bgtk&lt;/i&gt; (needs a running bgce for real apps):
++
++	gunzip bgtk-main.tar.gz
++	tar xf bgtk-main.tar
++	cd bgtk-main
++	make CC=/bin/tcc
++	make install
++
++	bgce &amp;
++	launcher
++	# or test_app, terminal, image_viewer,
++	# settings
++
++skip &lt;i&gt;gemini_browser&lt;/i&gt; unless you also build
++openssl (lin0 ships bearssl/libtls, not libssl).
++headless ui checks need no display device:
++
++	make headless &amp;&amp; ./headless
++
++stock lin0 is root-only, so /dev/fb0 and /dev/input
++permissions are fine for bring-up. ignore
++&lt;i&gt;ldconfig&lt;/i&gt; failures on install — dynamic libs
++load from /lib by default.
++
++
++&lt;b&gt;getting help&lt;/b&gt;
++
++mailing list: lin0 AT terminal DOT pink
++
++back to the &lt;a href=index.html&gt;home page&lt;/a&gt;.
++
++
++(C) 2023-26 Brian Mayer
++&lt;/pre&gt;
+</pre>

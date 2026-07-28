@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lin0 b26aa08</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}</style>
+<pre>
+<a href=index.html>lin0</a> / <b>commit</b>
+
+<a href=log.html>log</a> | <a href=tree.html>tree</a> | <a href=refs.html>refs</a>
+
+commit b26aa08
+parent <a href=commit-39c8531.html>39c8531</a> 
+author Brian Mayer &lt;bleemayer@gmail.com&gt;
+date   2026-07-06T20:20:50-03:00
+
+    Add hotplugd, fix TLS headers, and refresh Radxa rootfs tarball.
+
+    Mount devpts in init, ship a mdev-style hotplugd for input nodes, enable
+    UEVENT_HELPER across boards, install libtls/bearssl headers into /include,
+    use tccdir=/lib/tcc, and publish an updated rootfs-radxacm5io.tar.xz.
+
+<a href=tree-b26aa08.html>tree</a>
+
+<b>diff</b>
+
+diff --git a/Makefile b/Makefile
+index 8cedec5..2853b37 100644
+--- a/Makefile
++++ b/Makefile
+@@ -32,10 +32,10 @@ CACERT_URL := https://curl.se/ca/cacert.pem
+ CACERT_SHA256 := 86a1f3366afac7c6f8ae9f3c779ac221129328c43f0ab2b8817eb2f362a5025c
+ TLS_CFLAGS := -Os -fPIC -ffunction-sections -fdata-sections \
+ 	-fno-asynchronous-unwind-tables -fno-unwind-tables
+-TLS_INCLUDE := $(CURDIR)/build/tls-include
+ ROOTFS_LIBBEARSSL := rootfs/lib/libbearssl.so.$(BEARSSLVER)
+ ROOTFS_LIBTLS := rootfs/lib/libtls.so.$(LIBTLS_BEARSSL_MAJOR)
+ ROOTFS_TLS_LIBS := $(ROOTFS_LIBBEARSSL) $(ROOTFS_LIBTLS)
++ROOTFS_TLS_HDRS := rootfs/include/tls.h rootfs/include/bearssl.h
+ 
+ PLATFORMS  := aarch64 x86_64 hpelitedesk pinebookpro rpi3bplus rpi5 rpizero radxacm5io
+ AARCH64_PLATS := aarch64 arm64 radxacm5io rpi3bplus rpi5 pinebookpro rpi-cm5io m1mac
+@@ -61,7 +61,7 @@ export outdir := $(CURDIR)/rootfs
+ export PLATFORM
+ 
+ RADXA_LINUXVER   ?= master
+-RADXA_P3_MB      ?= 256
++RADXA_P3_MB      ?= 384
+ RADXA_P3_LBA     := 679936
+ RADXA_DTB        := rk3588s-radxa-cm5-io.dtb
+ RADXA_OFFICIAL   ?= build/official-radxa-inspect/radxa-cm5-io_bookworm_cli_b3.output.img
+@@ -77,7 +77,7 @@ PLAT_CC := $(CURDIR)/rootfs/bin/musl-gcc
+ 
+ SKIP_CHROOT_radxacm5io := 1
+ POST_TARGET_radxacm5io := radxacm5io-postinstall
+-TOYBOX_CFLAGS := -Os -fPIE -I$(TLS_INCLUDE) -I$(CURDIR)/rootfs/include $(TLS_CFLAGS)
++TOYBOX_CFLAGS := -Os -fPIE -I$(CURDIR)/rootfs/include $(TLS_CFLAGS)
+ TOYBOX_LDFLAGS = -pie -L$(CURDIR)/rootfs/lib -Wl,--gc-sections -Wl,-rpath,/lib \
+ 	-ltls -lbearssl -Wl,-dynamic-linker,/lib/$(MUSL_LDSONAME)
+ TOYBOX_STRIP := strip -s -R .note -R .comment
+@@ -121,8 +121,11 @@ rootfs/bin/init: init $(init_deps) | rootfs/home/root
+ 	mkdir -p $(dir $@) rootfs/dev/pts \
+ 		rootfs/proc rootfs/sys rootfs/tmp rootfs/var/run rootfs/run
+ 	chmod 1777 rootfs/tmp
+-	cp $&lt; $@
+-	chmod +x $@
++	cp -f $&lt; $@ &amp;&amp; chmod +x $@
++
++rootfs/bin/hotplugd: hotplugd
++	mkdir -p $(dir $@)
++	cp -f $&lt; $@ &amp;&amp; chmod +x $@
+ 
+ # Optional drop-ins: pkg/* -&gt; rootfs/home/root/* (pattern rule, no staging).
+ PKG_FILES := $(wildcard pkg/*)
+@@ -172,36 +175,39 @@ build/tinycc/.git:
+ 	mkdir -p build
+ 	git clone "$(TCCURL)" build/tinycc
+ 
+-$(ROOTFS_LIBBEARSSL): build/bearssl-$(BEARSSLVER)/Makefile rootfs/bin/musl-gcc
++$(ROOTFS_LIBBEARSSL) rootfs/include/bearssl.h: build/bearssl-$(BEARSSLVER)/Makefile rootfs/bin/musl-gcc
+ 	@echo "==&gt; bearssl ($(BEARSSLVER))"
+-	mkdir -p rootfs/lib $(TLS_INCLUDE)
++	mkdir -p rootfs/lib rootfs/include
+ 	$(MAKE) -C build/bearssl-$(BEARSSLVER) CC=$(PLAT_CC) \
+ 		CFLAGS="-std=c99 -Wall $(TLS_CFLAGS) -I src -I inc" build/libbearssl.a
+-	rm -rf $@.tmp &amp;&amp; mkdir $@.tmp &amp;&amp; (cd $@.tmp &amp;&amp; ar x $(CURDIR)/build/bearssl-$(BEARSSLVER)/build/libbearssl.a)
+-	$(PLAT_CC) -shared -Wl,-soname,libbearssl.so.0 -o $@ $@.tmp/*.o -Wl,--gc-sections
+-	rm -rf $@.tmp &amp;&amp; $(TOYBOX_STRIP) $@
++	rm -rf build/bearssl-so.tmp &amp;&amp; mkdir build/bearssl-so.tmp
++	(cd build/bearssl-so.tmp &amp;&amp; ar x $(CURDIR)/build/bearssl-$(BEARSSLVER)/build/libbearssl.a)
++	$(PLAT_CC) -shared -Wl,-soname,libbearssl.so.0 -o $(ROOTFS_LIBBEARSSL) \
++		build/bearssl-so.tmp/*.o -Wl,--gc-sections
++	rm -rf build/bearssl-so.tmp &amp;&amp; $(TOYBOX_STRIP) $(ROOTFS_LIBBEARSSL)
+ 	ln -sfn libbearssl.so.$(BEARSSLVER) rootfs/lib/libbearssl.so.0
+ 	ln -sfn libbearssl.so.0 rootfs/lib/libbearssl.so
+-	cp -f build/bearssl-$(BEARSSLVER)/inc/*.h $(TLS_INCLUDE)/
++	cp -f build/bearssl-$(BEARSSLVER)/inc/*.h rootfs/include/
+ 
+-$(ROOTFS_LIBTLS): build/libtls-bearssl/.git $(ROOTFS_LIBBEARSSL)
++$(ROOTFS_LIBTLS) rootfs/include/tls.h: build/libtls-bearssl/.git $(ROOTFS_LIBBEARSSL)
+ 	@echo "==&gt; libtls-bearssl"
+ 	$(MAKE) -C build/libtls-bearssl clean &gt;/dev/null 2&gt;&amp;1 || true
+ 	rm -f build/libtls-bearssl/config.mk build/libtls-bearssl/*.o \
+ 		build/libtls-bearssl/compat/*.o build/libtls-bearssl/libtls.a
+ 	printf '%s\n' 'CC=$(PLAT_CC)' \
+-		'CFLAGS=-Wall $(TLS_CFLAGS) -I. -I$(TLS_INCLUDE) -D_GNU_SOURCE -DLIBRESSL_INTERNAL' \
++		'CFLAGS=-Wall $(TLS_CFLAGS) -I. -I$(CURDIR)/rootfs/include -D_GNU_SOURCE -DLIBRESSL_INTERNAL' \
+ 		'LDFLAGS=-L$(CURDIR)/rootfs/lib' 'LDLIBS=-lbearssl' \
+ 		&gt; build/libtls-bearssl/config.mk
+ 	$(MAKE) -C build/libtls-bearssl libtls.a
+-	mkdir -p rootfs/lib $(TLS_INCLUDE)
+-	rm -rf $@.tmp &amp;&amp; mkdir $@.tmp &amp;&amp; (cd $@.tmp &amp;&amp; ar x $(CURDIR)/build/libtls-bearssl/libtls.a)
+-	$(PLAT_CC) -shared -Wl,-soname,libtls.so.$(LIBTLS_BEARSSL_MAJOR) -o $@ \
+-		$@.tmp/*.o -L$(CURDIR)/rootfs/lib -lbearssl -lpthread -Wl,--gc-sections
+-	rm -rf $@.tmp &amp;&amp; $(TOYBOX_STRIP) $@
++	mkdir -p rootfs/lib rootfs/include
++	rm -rf build/libtls-so.tmp &amp;&amp; mkdir build/libtls-so.tmp
++	(cd build/libtls-so.tmp &amp;&amp; ar x $(CURDIR)/build/libtls-bearssl/libtls.a)
++	$(PLAT_CC) -shared -Wl,-soname,libtls.so.$(LIBTLS_BEARSSL_MAJOR) -o $(ROOTFS_LIBTLS) \
++		build/libtls-so.tmp/*.o -L$(CURDIR)/rootfs/lib -lbearssl -lpthread -Wl,--gc-sections
++	rm -rf build/libtls-so.tmp &amp;&amp; $(TOYBOX_STRIP) $(ROOTFS_LIBTLS)
+ 	ln -sfn libtls.so.$(LIBTLS_BEARSSL_MAJOR) rootfs/lib/libtls.so
+-	cp -f build/libtls-bearssl/tls.h $(TLS_INCLUDE)/
+-	strings $@ | grep -q '/etc/ssl/cert.pem'
++	cp -f build/libtls-bearssl/tls.h rootfs/include/
++	strings $(ROOTFS_LIBTLS) | grep -q '/etc/ssl/cert.pem'
+ 
+ rootfs/lib/firmware/regulatory.db:
+ 	mkdir -p $(dir $@)
+@@ -234,7 +240,7 @@ boot_image = $(or $(BOOT_IMAGE_$(PLATFORM)),$(BOOT_IMAGE))
+ 
+ rootfs/bin/toybox: configs/$(PLATFORM)-toybox.config build/toybox/.git \
+ 		rootfs/bin/musl-gcc $(ROOTFS_MUSL_LD) $(LINUX_HEADERS) $(boot_image) \
+-		$(ROOTFS_TLS_LIBS)
++		$(ROOTFS_TLS_LIBS) $(ROOTFS_TLS_HDRS)
+ 	@echo "==&gt; toybox ($(PLATFORM))"
+ 	-$(MAKE) -C build/toybox distclean
+ 	cd build/toybox &amp;&amp; KCONFIG_ALLCONFIG=$(CURDIR)/configs/$(PLATFORM)-toybox.config \
+@@ -264,30 +270,29 @@ rootfs/bin/sh: rootfs/bin/musl-gcc build/mksh/Build.sh
+ 	mkdir -p rootfs/share/man/man1
+ 	-install -c -m 444 build/mksh/mksh.1 rootfs/share/man/man1/
+ 
+-# Keep the binary named tcc so libtool's tcc*) arms match (CC=/bin/tcc).
+-# POSIX cc is a symlink. Build tcc dynamically against musl (PT_INTERP =
+-# /lib/ld-musl-*.so.1, NEEDED libc.so) — never glibc's ld-linux / libc.so.6.
++# tcc named tcc (libtool tcc*); cc is a symlink. Dynamic musl only.
++# tccdir=/lib/tcc (private: libtcc1 + headers). Never tccdir=/lib (would create /lib/include).
+ TCC_ELFINTERP := /lib/$(MUSL_LDSONAME)
+ TCC_LDFLAGS := -Wl,-dynamic-linker,$(TCC_ELFINTERP) -L$(CURDIR)/rootfs/lib
+ rootfs/bin/tcc: rootfs/bin/make rootfs/bin/sh build/tinycc/.git \
+ 		$(LINUX_HEADERS) $(boot_image) rootfs/bin/musl-gcc $(ROOTFS_MUSL_LD) \
+ 		rootfs/lib/libc.so
+-	@echo "==&gt; tcc (dynamic musl via musl-gcc; interp $(TCC_ELFINTERP))"
++	@echo "==&gt; tcc (dynamic musl; interp $(TCC_ELFINTERP))"
+ 	$(MAKE) -C build/tinycc distclean &gt;/dev/null 2&gt;&amp;1 || true
+ 	cd build/tinycc &amp;&amp; ./configure --prefix=/ \
+ 		--cc="$(PLAT_CC)" \
+ 		--extra-ldflags="$(TCC_LDFLAGS)" \
+ 		--sysincludepaths=/include \
+ 		--libpaths=/lib \
+-		--crtprefix=/lib --tccdir=/lib \
++		--crtprefix=/lib --tccdir=/lib/tcc \
+ 		--elfinterp=$(TCC_ELFINTERP) \
+ 		--config-bcheck=no --disable-rpath --config-musl
+-	# configure sets LDFLAGS=-static when CC looks like *gcc*; override on the make line.
++	# configure may force LDFLAGS=-static for *gcc*; override on the make line.
+ 	$(MAKE) -C build/tinycc LDFLAGS='$(TCC_LDFLAGS)' tcc libtcc.a
+ 	$(MAKE) -C build/tinycc/lib \
+ 		XCC="$(CURDIR)/build/tinycc/tcc" \
+ 		XAR="$(CURDIR)/build/tinycc/tcc -ar" \
+-		XFLAGS="-B$(CURDIR)/rootfs/lib -I$(CURDIR)/rootfs/include \
++		XFLAGS="-B$(CURDIR)/build/tinycc -I$(CURDIR)/rootfs/include \
+ 		-I$(CURDIR)/build/tinycc -I$(CURDIR)/build/tinycc/include"
+ 	$(MAKE) -C build/tinycc DESTDIR=$(CURDIR)/rootfs install
+ 	@interp=$$(readelf -l rootfs/bin/tcc | sed -n 's/.*\[Requesting program interpreter: \(.*\)\]/\1/p'); \
+@@ -360,7 +365,8 @@ rootfs/boot/Image rootfs/boot/$(RADXA_DTB) $(LINUX_HEADERS): configs/radxacm5io-
+ 		modules_install headers_install
+ 	cp -f build/linux-src/arch/arm64/boot/Image rootfs/boot/Image
+ 	cp -f build/linux-src/arch/arm64/boot/dts/rockchip/$(RADXA_DTB) \
+-		rootfs/boot/$(RADXA_DTB) build/dtbs/
++		rootfs/boot/$(RADXA_DTB)
++	cp -f rootfs/boot/$(RADXA_DTB) build/dtbs/
+ 	strings rootfs/boot/$(RADXA_DTB) | grep -q haoyu,hym8563
+ 
+ else ifeq ($(PLATFORM),rpizero)
+@@ -395,7 +401,7 @@ endif
+ # --- skeleton / post-install ------------------------------------------------
+ 
+ .PHONY: skeleton
+-skeleton: rootfs/bin/init $(init_deps)
++skeleton: rootfs/bin/init rootfs/bin/hotplugd $(init_deps)
+ 
+ .PHONY: skeleton-chroot
+ skeleton-chroot: skeleton build/tinycc/.git scripts/make-target.sh
+@@ -510,10 +516,12 @@ radxacm5io-bootfiles: rootfs/boot/extlinux/extlinux.conf \
+ 
+ .PHONY: radxacm5io-postinstall
+ radxacm5io-postinstall: skeleton radxacm5io-bootfiles rootfs-home-pkg \
+-		$(LINUX_HEADERS) rootfs/bin/toybox rootfs/bin/tcc $(ROOTFS_TLS_LIBS)
++		$(LINUX_HEADERS) rootfs/bin/toybox rootfs/bin/tcc \
++		$(ROOTFS_TLS_LIBS) $(ROOTFS_TLS_HDRS)
+ 	@echo "==&gt; [radxacm5io] post-install"
+-	@ls -lh rootfs/bin/toybox rootfs/bin/tcc $(ROOTFS_TLS_LIBS)
+-	@ls -lh $(ROOTFS_PKG) 2&gt;/dev/null || true
++	@test -f rootfs/include/tls.h
++	@ls -lh rootfs/bin/toybox rootfs/bin/tcc rootfs/bin/hotplugd \
++		rootfs/include/tls.h $(ROOTFS_TLS_LIBS)
+ 
+ # Build the arm64 toolchain image from an inline Dockerfile (Docker layer-caches repeats).
+ .PHONY: radxacm5io-builder
+@@ -551,7 +559,7 @@ radxacm5io-img: $(RADXA_OFFICIAL) radxacm5io-rootfs
+ 	rm -f lin0-radxacm5io.img; \
+ 	dd if="$(RADXA_OFFICIAL)" of=lin0-radxacm5io.img bs=4M \
+ 		count=$$(((HEAD_BYTES+4194303)/4194304)) status=none; \
+-	python3 -c "p='lin0-radxacm5io.img';h=$$HEAD_BYTES;t=$$TOTAL_BYTES;f=open(p,'r+b');f.truncate(h);f.seek(t-1);f.write(b'\\0');f.close();print('image bytes',t)"; \
++	python3 -c "p='lin0-radxacm5io.img';h=$$HEAD_BYTES;t=$$TOTAL_BYTES;f=open(p,'r+b');f.truncate(h);f.truncate(t);f.close();print('image bytes',t)"; \
+ 	python3 scripts/gpt-resize-p3.py lin0-radxacm5io.img $(RADXA_P3_LBA) $$P3_SECTS; \
+ 	printf '%s\n' \
+ 		'set -euo pipefail' \
+@@ -564,18 +572,19 @@ radxacm5io-img: $(RADXA_OFFICIAL) radxacm5io-rootfs
+ 		'OFF=$$((P3_START_LBA*512))' \
+ 		'SZ=$$((P3_SECTS*512))' \
+ 		'LOOP=$$(losetup --find --show -o "$$OFF" --sizelimit "$$SZ" "$$IMG")' \
+-		'mkfs.ext4 -F -L "$$ROOT_LABEL" -U "$$ROOT_UUID" "$$LOOP"' \
++		'LOOP_SZ=$$(blockdev --getsize64 "$$LOOP")' \
++		'echo "p3 loop $$LOOP_SZ bytes (want $$SZ)"' \
++		'test "$$LOOP_SZ" -eq "$$SZ"' \
++		'mkfs.ext4 -F -b 4096 -L "$$ROOT_LABEL" -U "$$ROOT_UUID" "$$LOOP"' \
+ 		'mount "$$LOOP" "$$MNT"' \
+ 		'rsync -aH "$$ROOTFS"/ "$$MNT"/' \
+ 		'chmod 755 "$$MNT/lib/libc.so"' \
+ 		'ln -sfn libc.so "$$MNT/lib/ld-musl-aarch64.so.1"' \
+-		'rm -f "$$MNT/lib/ld-linux-aarch64.so.1" "$$MNT/lib/ld-linux-x86_64.so.2" "$$MNT/lib/ld-linux.so.2" "$$MNT/lib/ld-linux-armhf.so.3"' \
++		'rm -f "$$MNT/lib/ld-linux-"* "$$MNT/lib/ld-linux.so.2"' \
+ 		'mkdir -p "$$MNT/bin" "$$MNT/boot/extlinux" "$$MNT/proc" "$$MNT/sys" "$$MNT/dev" "$$MNT/tmp" "$$MNT/run"' \
+ 		'chmod 1777 "$$MNT/tmp"' \
+-		'install -m 0755 /work/init "$$MNT/bin/init"' \
+-		'install -m 0644 "$$ROOTFS/boot/Image" "$$MNT/boot/Image"' \
+-		'install -m 0644 "$$ROOTFS/boot/$(RADXA_DTB)" "$$MNT/boot/$(RADXA_DTB)"' \
+-		'printf "%s\n" "default emmc" "timeout 20" "menu title lin0 CM5 IO" "label emmc" "  menu label root=/dev/mmcblk0p3" "  linux /boot/Image" "  fdt /boot/$(RADXA_DTB)" "  append root=/dev/mmcblk0p3 $(RADXA_CMN) rootfstype=ext4" "label bylabel" "  menu label root=LABEL=$(RADXA_ROOT_LABEL)" "  linux /boot/Image" "  fdt /boot/$(RADXA_DTB)" "  append root=LABEL=$(RADXA_ROOT_LABEL) $(RADXA_CMN) rootfstype=ext4" &gt; "$$MNT/boot/extlinux/extlinux.conf"' \
++		'install -m 0755 /work/init /work/hotplugd "$$MNT/bin/"' \
++		'test -f "$$MNT/include/tls.h" &amp;&amp; test -f "$$MNT/bin/hotplugd"' \
+ 		'sync' \
+ 		'umount "$$MNT"' \
+ 		'losetup -d "$$LOOP"' \
+@@ -624,7 +633,7 @@ mount-rootfs:
+ 	sudo scripts/mounts.sh
+ 
+ clean: umount-rootfs
+-	rm -rf rootfs build/tls-include
++	rm -rf rootfs
+ 	rm -f rootfs-*.tar.xz lin0-*.img lin0-*.tar.xz build/cacert.pem build/cacert.pem.tmp*
+ 
+ distclean: umount-rootfs
+diff --git a/configs/hpelitedesk-linux.config b/configs/hpelitedesk-linux.config
+index f822984..6484215 100644
+--- a/configs/hpelitedesk-linux.config
++++ b/configs/hpelitedesk-linux.config
+@@ -1627,7 +1627,8 @@ CONFIG_PCIE_DW_PLAT_HOST=y
+ # Generic Driver Options
+ #
+ CONFIG_AUXILIARY_BUS=y
+-# CONFIG_UEVENT_HELPER is not set
++CONFIG_UEVENT_HELPER=y
++CONFIG_UEVENT_HELPER_PATH=""
+ CONFIG_DEVTMPFS=y
+ CONFIG_DEVTMPFS_MOUNT=y
+ CONFIG_DEVTMPFS_SAFE=y
+diff --git a/configs/m1mac-linux.config b/configs/m1mac-linux.config
+index c3ca7d2..175c86d 100644
+--- a/configs/m1mac-linux.config
++++ b/configs/m1mac-linux.config
+@@ -1713,7 +1713,8 @@ CONFIG_PCI_EPF_TEST=m
+ # Generic Driver Options
+ #
+ CONFIG_AUXILIARY_BUS=y
+-# CONFIG_UEVENT_HELPER is not set
++CONFIG_UEVENT_HELPER=y
++CONFIG_UEVENT_HELPER_PATH=""
+ CONFIG_DEVTMPFS=y
+ CONFIG_DEVTMPFS_MOUNT=y
+ # CONFIG_DEVTMPFS_SAFE is not set
+diff --git a/configs/pinebookpro-linux.config b/configs/pinebookpro-linux.config
+index a16ac73..4488a81 100644
+--- a/configs/pinebookpro-linux.config
++++ b/configs/pinebookpro-linux.config
+@@ -1710,7 +1710,8 @@ CONFIG_PCI_EPF_TEST=m
+ # Generic Driver Options
+ #
+ CONFIG_AUXILIARY_BUS=y
+-# CONFIG_UEVENT_HELPER is not set
++CONFIG_UEVENT_HELPER=y
++CONFIG_UEVENT_HELPER_PATH=""
+ CONFIG_DEVTMPFS=y
+ CONFIG_DEVTMPFS_MOUNT=y
+ # CONFIG_DEVTMPFS_SAFE is not set
+diff --git a/configs/radxacm5io-kernel.fragment b/configs/radxacm5io-kernel.fragment
+index 5e3abbe..400379b 100644
+--- a/configs/radxacm5io-kernel.fragment
++++ b/configs/radxacm5io-kernel.fragment
+@@ -153,6 +153,10 @@ CONFIG_OVERLAY_FS=y
+ # CONFIG_BLK_DEV_INITRD is not set
+ 
+ 
++# Usermode hotplug helper (/proc/sys/kernel/hotplug → /bin/hotplugd)
++CONFIG_UEVENT_HELPER=y
++CONFIG_UEVENT_HELPER_PATH=""
++
+ # --- Character devices / terminals (TTY, VT, PTY, serial, input) ---
+ # Required for getty, mksh, job control, /dev/null|zero|tty|pts, HDMI fbcon, USB kbd
+ CONFIG_TTY=y
+diff --git a/configs/radxacm5io-linux.config b/configs/radxacm5io-linux.config
+index 32f8cf4..1de0595 100644
+--- a/configs/radxacm5io-linux.config
++++ b/configs/radxacm5io-linux.config
+@@ -1028,7 +1028,8 @@ CONFIG_GENERIC_PCI_IOMAP=y
+ # Generic Driver Options
+ #
+ CONFIG_AUXILIARY_BUS=y
+-# CONFIG_UEVENT_HELPER is not set
++CONFIG_UEVENT_HELPER=y
++CONFIG_UEVENT_HELPER_PATH=""
+ CONFIG_DEVTMPFS=y
+ CONFIG_DEVTMPFS_MOUNT=y
+ # CONFIG_DEVTMPFS_SAFE is not set
+diff --git a/configs/rpizero-linux.config b/configs/rpizero-linux.config
+index 2f059fe..fd0e1c3 100644
+--- a/configs/rpizero-linux.config
++++ b/configs/rpizero-linux.config
+@@ -61,6 +61,8 @@ CONFIG_CFG80211=y
+ CONFIG_MAC80211=y
+ CONFIG_DEVTMPFS=y
+ CONFIG_DEVTMPFS_MOUNT=y
++CONFIG_UEVENT_HELPER=y
++CONFIG_UEVENT_HELPER_PATH=""
+ # CONFIG_STANDALONE is not set
+ CONFIG_RASPBERRYPI_FIRMWARE=y
+ CONFIG_SCSI=y
+diff --git a/configs/x86_64-linux.config b/configs/x86_64-linux.config
+index 0fcca1b..376fe52 100644
+--- a/configs/x86_64-linux.config
++++ b/configs/x86_64-linux.config
+@@ -1487,7 +1487,8 @@ CONFIG_PCCARD_NONSTATIC=y
+ # Generic Driver Options
+ #
+ CONFIG_AUXILIARY_BUS=y
+-# CONFIG_UEVENT_HELPER is not set
++CONFIG_UEVENT_HELPER=y
++CONFIG_UEVENT_HELPER_PATH=""
+ CONFIG_DEVTMPFS=y
+ CONFIG_DEVTMPFS_MOUNT=y
+ # CONFIG_DEVTMPFS_SAFE is not set
+diff --git a/hotplugd b/hotplugd
+new file mode 100755
+index 0000000..cb77cce
+--- /dev/null
++++ b/hotplugd
+@@ -0,0 +1,86 @@
++#!/bin/sh
++# hotplugd — minimal mdev-style hotplug helper for lin0.
++#
++# Modes:
++#   hotplugd -s     coldplug once (fix devices already present)
++#   hotplugd -d     background poll loop (works without CONFIG_UEVENT_HELPER)
++#   hotplugd        kernel usermode helper: ACTION/SUBSYSTEM/DEVNAME in env
++#
++# Register the helper (needs CONFIG_UEVENT_HELPER=y):
++#   echo /bin/hotplugd &gt; /proc/sys/kernel/hotplug
++#
++# Rules are hardcoded for now (input nodes → root:input 0660).
++
++export PATH=/bin
++
++# --- rules (hardcoded; make config-driven later) ----------------------------
++
++# /dev/input/* and /dev/uinput → group input (gid 45), mode 0660
++rule_input() {
++	_node=$1
++	[ -e "$_node" ] || return 0
++	case "$_node" in
++	/dev/input/*|/dev/uinput)
++		chown root:input "$_node" 2&gt;/dev/null
++		chmod 660 "$_node" 2&gt;/dev/null
++		;;
++	esac
++}
++
++apply_input_all() {
++	for _n in /dev/input/* /dev/uinput; do
++		rule_input "$_n"
++	done
++}
++
++# One kernel uevent (usermode helper path).
++handle_uevent() {
++	case "${ACTION:-}" in
++	add|change) ;;
++	*) return 0 ;;
++	esac
++
++	case "${SUBSYSTEM:-}" in
++	input|hid)
++		[ -n "${DEVNAME:-}" ] &amp;&amp; rule_input "/dev/$DEVNAME"
++		# Parent "input" events often have no DEVNAME; sweep the class.
++		apply_input_all
++		;;
++	esac
++}
++
++# --- entry points -----------------------------------------------------------
++
++case "${1:-}" in
++-s|--scan)
++	apply_input_all
++	exit 0
++	;;
++-d|--daemon)
++	while true; do
++		apply_input_all
++		sleep 2
++	done
++	;;
++-h|--help)
++	cat &lt;&lt;'HELP'
++hotplugd — simple mdev-like hotplug for lin0
++
++  hotplugd -s     apply rules to devices already present (coldplug)
++  hotplugd -d     polling daemon (no kernel helper required)
++  hotplugd        kernel usermode helper (ACTION/SUBSYSTEM/DEVNAME in env)
++
++  echo /bin/hotplugd &gt; /proc/sys/kernel/hotplug   # if CONFIG_UEVENT_HELPER=y
++HELP
++	exit 0
++	;;
++esac
++
++# Kernel helper invocation (or manual test with env set).
++if [ -n "${ACTION:-}" ] || [ -n "${SUBSYSTEM:-}" ]; then
++	handle_uevent
++	exit 0
++fi
++
++# Default: one-shot scan (same as -s).
++apply_input_all
+diff --git a/init b/init
+index 757aa6e..1ead871 100755
+--- a/init
++++ b/init
+@@ -16,11 +16,19 @@ mount -t tmpfs tmpfs /var/run
+ # world-writable sticky; configure scripts and shells need this
+ mount -t tmpfs -o mode=1777 tmpfs /tmp
+ mount -t devtmpfs devtmpfs /dev
++mkdir -p /dev/pts /dev/shm
++mount -t devpts devpts -o gid=5,mode=0620 /dev/pts
++mount -t tmpfs -o mode=1777 tmpfs /dev/shm
+ mount -t vfat /dev/mmcblk0p1 /boot
+ 
+ # kernel utsname; /etc/hostname alone is not enough for gethostname()
+ [ -s /etc/hostname ] &amp;&amp; hostname -F /etc/hostname
+ 
++# Prefer kernel usermode helper when built with CONFIG_UEVENT_HELPER.
++if [ -w /proc/sys/kernel/hotplug ]; then
++	echo /bin/hotplugd &gt; /proc/sys/kernel/hotplug
++fi
++
+ modprobe hid_apple
+ modprobe realtek
+ modprobe rtl8150
+@@ -30,6 +38,10 @@ modprobe mac80211
+ modprobe rfkill
+ modprobe rtl8xxxu
+ 
++# Coldplug then poll: poll covers boards without UEVENT_HELPER and late USB.
++hotplugd -s
++hotplugd -d &amp;
++
+ clear
+ while true; do
+ 	getty 115200 tty0 linux
+diff --git a/rootfs-radxacm5io.tar.xz b/rootfs-radxacm5io.tar.xz
+index 75c50d3..da2f9f8 100644
+Binary files a/rootfs-radxacm5io.tar.xz and b/rootfs-radxacm5io.tar.xz differ
+diff --git a/scripts/make-target.sh b/scripts/make-target.sh
+index 5ffad3a..e24df11 100755
+--- a/scripts/make-target.sh
++++ b/scripts/make-target.sh
+@@ -19,7 +19,7 @@ cd /tmp/tinycc
+ 	--libpaths=/lib \
+ 	--elfinterp=/lib/ld-musl-aarch64.so.1 \
+ 	--crtprefix=/lib \
+-	--tccdir=/lib \
++	--tccdir=/lib/tcc \
+ 	--config-bcheck=no
+ # Ensure dynamic musl link (configure may default LDFLAGS=-static for *gcc* names).
+ sed -i 's|^LDFLAGS=.*|LDFLAGS=-Wl,-dynamic-linker,/lib/ld-musl-aarch64.so.1|' config.mak
+</pre>

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lin0 4281fc8</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}</style>
+<pre>
+<a href=index.html>lin0</a> / <b>commit</b>
+
+<a href=log.html>log</a> | <a href=tree.html>tree</a> | <a href=refs.html>refs</a>
+
+commit 4281fc8
+parent <a href=commit-80bb6f4.html>80bb6f4</a> 
+author myr &lt;myr@terminal.pink&gt;
+date   2024-09-17T18:28:18-03:00
+
+    improved rootfs folders
+
+<a href=tree-4281fc8.html>tree</a>
+
+<b>diff</b>
+
+diff --git a/init b/init
+index 3dbb05b..4c2bc14 100644
+--- a/init
++++ b/init
+@@ -8,4 +8,4 @@ mount -t tmpfs /tmp /run
+ mount -t tmpfs /var/run /var/run
+ mount -t vfat /dev/mmcblk0p1 /boot
+ 
+-getty 115200 /dev/tty1 linux
++exec getty 115200 /dev/tty1 linux
+diff --git a/make.sh b/make.sh
+index 2cf6023..5c74512 100755
+--- a/make.sh
++++ b/make.sh
+@@ -98,7 +98,7 @@ postinstall="../scripts/post-install-$platform.sh"
+ cd ../
+ 
+ echo "copying files"
+-mkdir rootfs/etc rootfs/sbin
++mkdir -p rootfs/etc rootfs/sbin rootfs/dev rootfs/sys rootfs/proc rootfs/var/run
+ cp -r etc rootfs/etc
+ cp init rootfs/sbin
+ 
+</pre>

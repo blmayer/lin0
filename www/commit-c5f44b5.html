@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lin0 c5f44b5</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}</style>
+<pre>
+<a href=index.html>lin0</a> / <b>commit</b>
+
+<a href=log.html>log</a> | <a href=tree.html>tree</a> | <a href=refs.html>refs</a>
+
+commit c5f44b5
+parent <a href=commit-d05cbeb.html>d05cbeb</a> 
+author Brian Mayer &lt;bleemayer@gmail.com&gt;
+date   2026-07-11T12:37:06-03:00
+
+    Wiki: document growing root partition and building resize2fs with tcc.
+
+    Cover fdisk/partprobe steps for Radxa p3, the e2fsprogs recipe with
+    pkg-config stub, __GNUC_PREREQ workaround, fuse2fs disabled, and
+    libtcc1.a path fix.
+
+<a href=tree-c5f44b5.html>tree</a>
+
+<b>diff</b>
+
+diff --git a/www/wiki.html b/www/wiki.html
+index 2d53ea5..f674b1d 100644
+--- a/www/wiki.html
++++ b/www/wiki.html
+@@ -25,6 +25,8 @@ extra software such as bgce and bgtk.
+ - &lt;a href=#passwd&gt;passwords&lt;/a&gt;
+ - &lt;a href=#notes&gt;notes on su / getty&lt;/a&gt;
+ - &lt;a href=#build&gt;building software&lt;/a&gt;
++- &lt;a href=#grow&gt;growing the root partition&lt;/a&gt;
++- &lt;a href=#resize2fs&gt;resize2fs (e2fsprogs + tcc)&lt;/a&gt;
+ - &lt;a href=#bgce&gt;bgce and bgtk&lt;/a&gt;
+ 
+ 
+@@ -282,8 +284,116 @@ packages — basename &lt;i&gt;cc&lt;/i&gt; leaves
+ is tcc.
+ 
+ many tools need a writable &lt;i&gt;/tmp&lt;/i&gt; (see above) and
+-enough space on the root partition — enlarge images
+-or build on mounted storage when trees get big.
++enough space on the root partition — see
++&lt;a href=#grow&gt;growing the root partition&lt;/a&gt; or build
++on mounted storage when trees get big.
++
++
++&lt;a id=grow&gt;&lt;/a&gt;&lt;b&gt;growing the root partition&lt;/b&gt;
++
++radxa images use GPT: boot bits on early partitions,
++lin0 root on &lt;b&gt;partition 3&lt;/b&gt; (&lt;i&gt;/dev/mmcblk0p3&lt;/i&gt;).
++the shipped image is small (default ~384 MiB root);
++free eMMC space after p3 is unused until you grow
++both the &lt;b&gt;partition&lt;/b&gt; and the &lt;b&gt;ext4&lt;/b&gt; filesystem.
++
++you have &lt;i&gt;fdisk&lt;/i&gt;, &lt;i&gt;partprobe&lt;/i&gt;, and &lt;i&gt;blkid&lt;/i&gt;
++on the box. you do &lt;b&gt;not&lt;/b&gt; ship &lt;i&gt;resize2fs&lt;/i&gt; —
++build it with tcc (next section) first.
++
++1) inspect:
++
++	fdisk -l /dev/mmcblk0
++	df -h /
++	blkid /dev/mmcblk0p3
++
++note p3 &lt;b&gt;start&lt;/b&gt; LBA (must not change).
++
++2) enlarge the GPT partition with fdisk (same start,
++new end = last free sector). delete entry 3, recreate
++type Linux with the same first sector and a larger
++last sector. write and:
++
++	partprobe /dev/mmcblk0
++	fdisk -l /dev/mmcblk0
++
++3) grow the filesystem (after &lt;i&gt;resize2fs&lt;/i&gt; is installed):
++
++	resize2fs /dev/mmcblk0p3
++	df -h /
++
++online grow of a mounted root usually works on modern
++ext4; if resize2fs refuses, do it unmounted from another
++system or a temporary root.
++
++safer alternative if you can reflash: rebuild a larger
++image on the host:
++
++	make radxacm5io RADXA_P3_MB=8192
++	rkdeveloptool wl 0 lin0-radxacm5io.img
++
++(set RADXA_P3_MB to free eMMC size in MiB, leave room
++for GPT backup at the end of the disk).
++
++
++&lt;a id=resize2fs&gt;&lt;/a&gt;&lt;b&gt;resize2fs (e2fsprogs + tcc)&lt;/b&gt;
++
++build e2fsprogs on the board with tcc. needs network
++for the tarball (&lt;i&gt;wget&lt;/i&gt;).
++
++stub out pkg-config (not shipped):
++
++	cat &gt; /tmp/pkg-config &lt;&lt;'EOF'
++	#!/bin/sh
++	[ "$1" = "--version" ] &amp;&amp; { echo 0.29.2; exit 0; }
++	[ "$1" = "--atleast-pkgconfig-version" ] &amp;&amp; exit 0
++	exit 1
++	EOF
++	chmod +x /tmp/pkg-config
++	export PKG_CONFIG=/tmp/pkg-config
++
++tcc mishandles &lt;i&gt;__GNUC_PREREQ(maj, min)&lt;/i&gt; in
++e2fsprogs headers (error looks like
++&lt;i&gt;bad preprocessor expression: #if 0 ( 4 , 6 )&lt;/i&gt;
++in rbtree.h). force a two-argument no-op macro:
++
++	cat &gt; /tmp/tcc-compat.h &lt;&lt;'EOF'
++	#undef __GNUC_PREREQ
++	#define __GNUC_PREREQ(maj, min) 0
++	EOF
++
++if tcc says &lt;i&gt;libtcc1.a not found&lt;/i&gt;:
++
++	cp /lib/tcc/libtcc1.a /lib/
++
++fetch and build (example 1.47.2; any recent .tar.gz):
++
++	cd /tmp
++	wget https://github.com/tytso/e2fsprogs/archive/refs/tags/v1.47.2.tar.gz
++	gunzip v1.47.2.tar.gz
++	tar xf v1.47.2.tar
++	cd e2fsprogs-1.47.2
++	mkdir build &amp;&amp; cd build
++	../configure \
++	  --prefix=/ \
++	  --disable-nls \
++	  --disable-fuse2fs \
++	  --disable-uuidd \
++	  --disable-fsck \
++	  --enable-libuuid \
++	  --enable-libblkid \
++	  CC=tcc \
++	  CFLAGS="-Os -include /tmp/tcc-compat.h"
++	make -j$(nproc)
++	install -m 755 resize/resize2fs /bin/resize2fs
++
++notes:
++
++- &lt;i&gt;--disable-fuse2fs&lt;/i&gt; — no fuse headers on lin0
++- warnings &lt;i&gt;_IOW&lt;/i&gt; / &lt;i&gt;_IOR&lt;/i&gt; redefined are harmless
++  (musl vs linux ioctl headers)
++- you also get e2fsck, tune2fs, mke2fs under build/ if
++  useful; install what you need into /bin
+ 
+ 
+ &lt;a id=bgce&gt;&lt;/a&gt;&lt;b&gt;bgce and bgtk&lt;/b&gt;
+</pre>

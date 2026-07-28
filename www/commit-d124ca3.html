@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lin0 d124ca3</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}</style>
+<pre>
+<a href=index.html>lin0</a> / <b>commit</b>
+
+<a href=log.html>log</a> | <a href=tree.html>tree</a> | <a href=refs.html>refs</a>
+
+commit d124ca3
+parent <a href=commit-69821cb.html>69821cb</a> 
+author Brian Mayer &lt;bleemayer@gmail.com&gt;
+date   2026-07-10T18:00:55-03:00
+
+    Switch rootfs packaging from tar.xz to tar.gz.
+
+    Gzip is available on-device via toybox; update Makefile, docs, and
+    republish platform archives in the new format.
+
+<a href=tree-d124ca3.html>tree</a>
+
+<b>diff</b>
+
+diff --git a/Makefile b/Makefile
+index 37ff0b2..7ff4db8 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,6 +1,6 @@
+ # lin0 — file prerequisites, literal paths, no stamps
+ #
+-#   make                 # host arch -&gt; rootfs-&lt;arch&gt;.tar.xz
++#   make                 # host arch -&gt; rootfs-&lt;arch&gt;.tar.gz
+ #   make radxacm5io      # rootfs tarball + hybrid image
+ #   make list | help | clean | distclean
+ 
+@@ -221,7 +221,17 @@ else ifeq ($(PLATFORM),radxacm5io)
+   BOOT_IMAGE = rootfs/boot/Image
+ endif
+ 
+-rootfs/bin/toybox: configs/$(PLATFORM)-toybox.config build/toybox/.git \
++LIN0_TOYBOX_PATCHES := $(sort $(wildcard patches/toybox-*.patch))
++
++# Apply lin0 toybox patches once per source tree checkout.
++build/toybox/.lin0-patched: build/toybox/.git $(LIN0_TOYBOX_PATCHES)
++	for p in $(LIN0_TOYBOX_PATCHES); do \
++		patch -d build/toybox -p1 -N &lt; "$$p" || \
++		patch -d build/toybox -p1 -R -s --dry-run &lt; "$$p"; \
++	done
++	touch $@
++
++rootfs/bin/toybox: configs/$(PLATFORM)-toybox.config build/toybox/.lin0-patched \
+ 		rootfs/bin/musl-gcc $(ROOTFS_MUSL_LD) $(LINUX_HEADERS) $(BOOT_IMAGE) \
+ 		$(ROOTFS_TLS_LIBS) $(ROOTFS_TLS_HDRS)
+ 	@echo "==&gt; toybox ($(PLATFORM))"
+@@ -415,13 +425,13 @@ RADXA_BUILDER_PKGS := build-essential gcc g++ make bison flex bc kmod cpio rsync
+ 
+ define PLAT_RULE
+ .PHONY: $(1)
+-$(1): rootfs-$(1).tar.xz
++$(1): rootfs-$(1).tar.gz
+ 
+-rootfs-$(1).tar.xz: force-platform-$(1) configs/$(1)-linux.config configs/$(1)-toybox.config \
++rootfs-$(1).tar.gz: force-platform-$(1) configs/$(1)-linux.config configs/$(1)-toybox.config \
+ 		rootfs/bin/init $(ROOTFS_ETC) rootfs-home-pkg
+-	@echo "==&gt; tar rootfs-$(1).tar.xz"
+-	cd rootfs &amp;&amp; tar cfJ $(CURDIR)/rootfs-$(1).tar.xz .
+-	@echo "Build complete: rootfs-$(1).tar.xz"
++	@echo "==&gt; tar rootfs-$(1).tar.gz"
++	cd rootfs &amp;&amp; tar czf $(CURDIR)/rootfs-$(1).tar.gz .
++	@echo "Build complete: rootfs-$(1).tar.gz"
+ 
+ .PHONY: force-platform-$(1)
+ force-platform-$(1):
+@@ -560,16 +570,16 @@ radxacm5io-img: $(RADXA_OFFICIAL) radxacm5io-rootfs
+ 
+ .PHONY: radxacm5io
+ radxacm5io: radxacm5io-img
+-	@echo "==&gt; tar rootfs-radxacm5io.tar.xz"
+-	cd rootfs &amp;&amp; tar cfJ $(CURDIR)/rootfs-radxacm5io.tar.xz .
+-	@ls -lh lin0-radxacm5io.img rootfs-radxacm5io.tar.xz
++	@echo "==&gt; tar rootfs-radxacm5io.tar.gz"
++	cd rootfs &amp;&amp; tar czf $(CURDIR)/rootfs-radxacm5io.tar.gz .
++	@ls -lh lin0-radxacm5io.img rootfs-radxacm5io.tar.gz
+ 	@echo "Flash: rkdeveloptool wl 0 lin0-radxacm5io.img"
+ 
+ # --- meta -------------------------------------------------------------------
+ 
+ .PHONY: all help list clean distclean umount-rootfs mount-rootfs rpizero-img
+ 
+-rpizero-img: rootfs-rpizero.tar.xz
++rpizero-img: rootfs-rpizero.tar.gz
+ 	scripts/mkimg-rpizero.sh
+ 
+ ifeq ($(filter $(PLATFORM),$(PLATFORMS)),)
+@@ -585,7 +595,7 @@ help:
+ 	@echo "lin0 — each platform is a Make target."
+ 	@echo "  make &lt;platform&gt;   one of: $(PLATFORMS)"
+ 	@echo "  make radxacm5io   rootfs tarball + hybrid image"
+-	@echo "  make rpizero-img  SD image from rootfs-rpizero.tar.xz"
++	@echo "  make rpizero-img  SD image from rootfs-rpizero.tar.gz"
+ 	@echo "  Edit etc/*, init, configs/* — then rebuild."
+ 
+ list:
+@@ -599,10 +609,10 @@ mount-rootfs:
+ 
+ clean: umount-rootfs
+ 	rm -rf rootfs
+-	rm -f rootfs-*.tar.xz lin0-*.img lin0-*.tar.xz build/cacert.pem build/cacert.pem.tmp*
++	rm -f rootfs-*.tar.gz rootfs-*.tar.xz lin0-*.img lin0-*.tar.gz lin0-*.tar.xz build/cacert.pem build/cacert.pem.tmp*
+ 
+ distclean: umount-rootfs
+ 	rm -rf build rootfs
+-	rm -f rootfs-*.tar.xz lin0-*.img lin0-*.tar.xz
++	rm -f rootfs-*.tar.gz rootfs-*.tar.xz lin0-*.img lin0-*.tar.gz lin0-*.tar.xz
+ 
+ .DEFAULT_GOAL := all
+diff --git a/README.md b/README.md
+index 32565d5..fb6f04c 100644
+--- a/README.md
++++ b/README.md
+@@ -38,7 +38,7 @@ make help          # list platforms
+ make               # build for the host architecture
+ ```
+ 
+-Each platform is a Make target. Outputs are `rootfs-&lt;platform&gt;.tar.xz`
++Each platform is a Make target. Outputs are `rootfs-&lt;platform&gt;.tar.gz`
+ (and a full disk image for some boards).
+ 
+ ```sh
+@@ -59,19 +59,19 @@ Architecture-only (no kernel):
+ 
+ | Artifact | Notes |
+ | --- | --- |
+-| [`rootfs-x86_64.tar.xz`](./rootfs-x86_64.tar.xz) | ~3.3 MB |
+-| [`rootfs-arm64.tar.xz`](./rootfs-arm64.tar.xz) | ~3.0 MB |
++| [`rootfs-x86_64.tar.gz`](./rootfs-x86_64.tar.gz) | ~4.6 MB |
++| [`rootfs-arm64.tar.gz`](./rootfs-arm64.tar.gz) | ~3.9 MB |
+ 
+ Platform images (include kernel where applicable):
+ 
+ | Platform | Artifact | Build |
+ | --- | --- | --- |
+-| HP EliteDesk 800 G1 | [`rootfs-hpelitedesk.tar.xz`](./rootfs-hpelitedesk.tar.xz) | `make hpelitedesk` |
+-| Pinebook Pro | [`rootfs-pinebookpro.tar.xz`](./rootfs-pinebookpro.tar.xz) | `make pinebookpro` |
+-| Raspberry Pi 3B+ | [`rootfs-rpi3b+.tar.xz`](./rootfs-rpi3b+.tar.xz) | `make rpi3bplus` |
+-| Raspberry Pi Zero / Zero W | `rootfs-rpizero.tar.xz`, `lin0-rpizero.img` | `make rpizero` / `make rpizero-img` |
+-| Raspberry Pi CM5 + IO | [`rootfs-rpi-cm5io.tar.xz`](./rootfs-rpi-cm5io.tar.xz) | `make rpi-cm5io` |
+-| Radxa CM5 + IO | `rootfs-radxacm5io.tar.xz`, `lin0-radxacm5io.img` | `make radxacm5io` |
++| HP EliteDesk 800 G1 | [`rootfs-hpelitedesk.tar.gz`](./rootfs-hpelitedesk.tar.gz) | `make hpelitedesk` |
++| Pinebook Pro | [`rootfs-pinebookpro.tar.gz`](./rootfs-pinebookpro.tar.gz) | `make pinebookpro` |
++| Raspberry Pi 3B+ | [`rootfs-rpi3b+.tar.gz`](./rootfs-rpi3b+.tar.gz) | `make rpi3bplus` |
++| Raspberry Pi Zero / Zero W | `rootfs-rpizero.tar.gz`, `lin0-rpizero.img` | `make rpizero` / `make rpizero-img` |
++| Raspberry Pi CM5 + IO | [`rootfs-rpi-cm5io.tar.gz`](./rootfs-rpi-cm5io.tar.gz) | `make rpi-cm5io` |
++| Radxa CM5 + IO | `rootfs-radxacm5io.tar.gz`, `lin0-radxacm5io.img` | `make radxacm5io` |
+ 
+ ### Docker
+ 
+@@ -87,7 +87,7 @@ Architectures match the tarballs above.
+ ## Install from a tarball
+ 
+ ```sh
+-tar -xf rootfs-ARCH.tar.xz -C /mnt/your-root
++tar -xf rootfs-ARCH.tar.gz -C /mnt/your-root
+ cp path/to/kernel /mnt/your-root/boot/   # if the tarball has no kernel
+ ```
+ 
+@@ -114,7 +114,7 @@ make radxacm5io
+ | Output | Purpose |
+ | --- | --- |
+ | `lin0-radxacm5io.img` | Full GPT image (loader at sector 64, ext4 root on partition 3) |
+-| `rootfs-radxacm5io.tar.xz` | Root filesystem (kernel + DTB under `/boot`) |
++| `rootfs-radxacm5io.tar.gz` | Root filesystem (kernel + DTB under `/boot`) |
+ | `build/rk3588_spl_loader*.bin` | Maskrom stage-1 loader for `rkdeveloptool db` |
+ 
+ ### Flash to eMMC (recommended)
+@@ -172,7 +172,7 @@ find the rootfs.
+    make              # host architecture
+    ```
+ 
+-3. Install the resulting `rootfs-*.tar.xz` (or disk image) on the target.
++3. Install the resulting `rootfs-*.tar.gz` (or disk image) on the target.
+ 
+ Static system config lives in `etc/` (generic only). TLS trust anchors are
+ fetched at build time from [curl.se/ca/cacert.pem](https://curl.se/ca/cacert.pem)
+diff --git a/rootfs-radxacm5io.tar.xz b/rootfs-radxacm5io.tar.gz
+similarity index 71%
+rename from rootfs-radxacm5io.tar.xz
+rename to rootfs-radxacm5io.tar.gz
+index 1dbc691..83b5947 100644
+Binary files a/rootfs-radxacm5io.tar.xz and b/rootfs-radxacm5io.tar.gz differ
+diff --git a/scripts/mkimg-rpizero.sh b/scripts/mkimg-rpizero.sh
+index 3f6552a..4547b86 100755
+--- a/scripts/mkimg-rpizero.sh
++++ b/scripts/mkimg-rpizero.sh
+@@ -1,5 +1,5 @@
+ #!/bin/sh
+-# Build a flashable SD image for Raspberry Pi Zero / Zero W from rootfs-rpizero.tar.xz
++# Build a flashable SD image for Raspberry Pi Zero / Zero W from rootfs-rpizero.tar.gz
+ #
+ # Layout (classic RPi):
+ #   p1  FAT32  ~64 MiB   /boot (firmware + kernel.img + DTB + config.txt)
+@@ -18,7 +18,7 @@ cd "$REPO_ROOT"
+ 
+ IMG_SIZE_MB="${IMG_SIZE_MB:-256}"
+ BOOT_SIZE_MB="${BOOT_SIZE_MB:-64}"
+-ROOTFS_TAR="${ROOTFS_TAR:-$REPO_ROOT/rootfs-rpizero.tar.xz}"
++ROOTFS_TAR="${ROOTFS_TAR:-$REPO_ROOT/rootfs-rpizero.tar.gz}"
+ OUT_IMG="${OUT_IMG:-$REPO_ROOT/lin0-rpizero.img}"
+ WORK="${WORK:-$REPO_ROOT/build/rpizero-img}"
+ 
+diff --git a/www/index.html b/www/index.html
+index 0e2553a..78e267d 100644
+--- a/www/index.html
++++ b/www/index.html
+@@ -78,19 +78,19 @@ start with a ready environment.
+ 
+ &lt;i&gt;tarballs&lt;/i&gt;
+ 
+-our tarballs are compressed with xz, thus .tar.xz
++our tarballs are compressed with gzip, thus .tar.gz
+ files, these are targeted at platforms, and do not
+ include the linux kernel:
+ 
+-- &lt;a href=rootfs-x86_64.tar.xz download&gt;x86_64&lt;/a&gt; [3.3Mb]
+-- &lt;a href=rootfs-arm64.tar.xz download&gt;arm64&lt;/a&gt; [3.0Mb]
++- &lt;a href=rootfs-x86_64.tar.gz download&gt;x86_64&lt;/a&gt; [4.6Mb]
++- &lt;a href=rootfs-arm64.tar.gz download&gt;arm64&lt;/a&gt; [3.9Mb]
+ 
+ and for specific platforms, including the kernel:
+ 
+-- &lt;a href=rootfs-hpelitedesk.tar.xz download&gt;hp elite desk 800 g1&lt;/a&gt; [13Mb]
+-- &lt;a href=rootfs-pinebookpro.tar.xz download&gt;pinebook pro&lt;/a&gt; [13Mb]
+-- &lt;a href=rootfs-rpi3b+.tar.xz download&gt;raspberry pi 3b+&lt;/a&gt; [26Mb]
+-- &lt;a href=rootfs-rpi-cm5io.tar.xz download&gt;raspberry pi cm5 + io board&lt;/a&gt; [36Mb]
++- &lt;a href=rootfs-hpelitedesk.tar.gz download&gt;hp elite desk 800 g1&lt;/a&gt; [14Mb]
++- &lt;a href=rootfs-pinebookpro.tar.gz download&gt;pinebook pro&lt;/a&gt; [14Mb]
++- &lt;a href=rootfs-rpi3b+.tar.gz download&gt;raspberry pi 3b+&lt;/a&gt; [35Mb]
++- &lt;a href=rootfs-rpi-cm5io.tar.gz download&gt;raspberry pi cm5 + io board&lt;/a&gt; [51Mb]
+ 
+ 
+ &lt;i&gt;docker&lt;/i&gt;
+diff --git a/www/rootfs-arm64.tar.gz b/www/rootfs-arm64.tar.gz
+new file mode 100644
+index 0000000..c522142
+Binary files /dev/null and b/www/rootfs-arm64.tar.gz differ
+diff --git a/www/rootfs-arm64.tar.xz b/www/rootfs-arm64.tar.xz
+deleted file mode 100644
+index 9975fdd..0000000
+Binary files a/www/rootfs-arm64.tar.xz and /dev/null differ
+diff --git a/www/rootfs-hpelitedesk.tar.xz b/www/rootfs-hpelitedesk.tar.gz
+similarity index 76%
+rename from www/rootfs-hpelitedesk.tar.xz
+rename to www/rootfs-hpelitedesk.tar.gz
+index 061a412..ede8f8b 100644
+Binary files a/www/rootfs-hpelitedesk.tar.xz and b/www/rootfs-hpelitedesk.tar.gz differ
+diff --git a/www/rootfs-pinebookpro.tar.xz b/www/rootfs-pinebookpro.tar.gz
+similarity index 73%
+rename from www/rootfs-pinebookpro.tar.xz
+rename to www/rootfs-pinebookpro.tar.gz
+index 4aaa259..e7738c2 100644
+Binary files a/www/rootfs-pinebookpro.tar.xz and b/www/rootfs-pinebookpro.tar.gz differ
+diff --git a/www/rootfs-rpi-cm5io.tar.gz b/www/rootfs-rpi-cm5io.tar.gz
+new file mode 100644
+index 0000000..cf76c81
+Binary files /dev/null and b/www/rootfs-rpi-cm5io.tar.gz differ
+diff --git a/www/rootfs-rpi-cm5io.tar.xz b/www/rootfs-rpi3b+.tar.gz
+similarity index 74%
+rename from www/rootfs-rpi-cm5io.tar.xz
+rename to www/rootfs-rpi3b+.tar.gz
+index e0d611e..603b735 100644
+Binary files a/www/rootfs-rpi-cm5io.tar.xz and b/www/rootfs-rpi3b+.tar.gz differ
+diff --git a/www/rootfs-rpi3b+.tar.xz b/www/rootfs-rpi3b+.tar.xz
+deleted file mode 100644
+index 0444893..0000000
+Binary files a/www/rootfs-rpi3b+.tar.xz and /dev/null differ
+diff --git a/www/rootfs-x86_64.tar.gz b/www/rootfs-x86_64.tar.gz
+new file mode 100644
+index 0000000..df31e01
+Binary files /dev/null and b/www/rootfs-x86_64.tar.gz differ
+diff --git a/www/rootfs-x86_64.tar.xz b/www/rootfs-x86_64.tar.xz
+deleted file mode 100644
+index cdeaaee..0000000
+Binary files a/www/rootfs-x86_64.tar.xz and /dev/null differ
+</pre>

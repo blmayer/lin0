@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lin0 3e5579c</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}</style>
+<pre>
+<a href=index.html>lin0</a> / <b>commit</b>
+
+<a href=log.html>log</a> | <a href=tree.html>tree</a> | <a href=refs.html>refs</a>
+
+commit 3e5579c
+parent <a href=commit-c5f44b5.html>c5f44b5</a> 
+author Brian Mayer &lt;bleemayer@gmail.com&gt;
+date   2026-07-16T22:26:36-03:00
+
+    radxa: enable minimum ALSA USB audio with OSS mixer and /dev/dsp
+
+    Build-in class-compliant USB headsets plus ALSA OSS emulation so mix and
+    raw PCM via /dev/dsp work. Refresh radxacm5io rootfs tarballs and site size.
+
+<a href=tree-3e5579c.html>tree</a>
+
+<b>diff</b>
+
+diff --git a/configs/radxacm5io-kernel.fragment b/configs/radxacm5io-kernel.fragment
+index 400379b..a564b30 100644
+--- a/configs/radxacm5io-kernel.fragment
++++ b/configs/radxacm5io-kernel.fragment
+@@ -528,9 +528,22 @@ CONFIG_CRYPTO_NULL=y
+ CONFIG_CRYPTO_HASH=y
+ CONFIG_KEYS=y
+ 
++# --- Sound: minimum ALSA + USB audio + OSS mixer (/dev/mixer for toybox mix) ---
++# No SoC/HDMI ASoC — USB DAC/headset only. OSS emu is ALSA-backed (mainline has no pure OSS).
++CONFIG_SOUND=y
++CONFIG_SND=y
++CONFIG_SND_USB=y
++CONFIG_SND_USB_AUDIO=y
++CONFIG_SND_OSSEMUL=y
++CONFIG_SND_MIXER_OSS=y
++CONFIG_SND_PCM_OSS=y
++CONFIG_SND_PCM_OSS_PLUGINS=y
++# CONFIG_SND_SEQUENCER is not set
++# CONFIG_SND_SOC is not set
++# CONFIG_SND_HDA is not set
++
+ # --- Explicitly off (still not full vendor defconfig) ---
+ # CONFIG_PCI is not set
+-# CONFIG_SOUND is not set
+ # CONFIG_BT is not set
+ # CONFIG_MEDIA_SUPPORT is not set
+ # CONFIG_DRM_PANFROST is not set
+diff --git a/configs/radxacm5io-linux.config b/configs/radxacm5io-linux.config
+index 1de0595..40e52d2 100644
+--- a/configs/radxacm5io-linux.config
++++ b/configs/radxacm5io-linux.config
+@@ -2371,6 +2371,8 @@ CONFIG_DRM_ANALOGIX_DP=y
+ # CONFIG_DRM_CDNS_MHDP8546 is not set
+ CONFIG_DRM_DW_DP=y
+ CONFIG_DRM_DW_HDMI=y
++# CONFIG_DRM_DW_HDMI_AHB_AUDIO is not set
++# CONFIG_DRM_DW_HDMI_GP_AUDIO is not set
+ CONFIG_DRM_DW_HDMI_CEC=y
+ CONFIG_DRM_DW_HDMI_QP=y
+ CONFIG_DRM_DW_HDMI_QP_CEC=y
+@@ -2640,7 +2642,54 @@ CONFIG_FRAMEBUFFER_CONSOLE_ROTATION=y
+ # end of Graphics support
+ 
+ # CONFIG_DRM_ACCEL is not set
+-# CONFIG_SOUND is not set
++CONFIG_SOUND=y
++CONFIG_SOUND_OSS_CORE=y
++CONFIG_SOUND_OSS_CORE_PRECLAIM=y
++CONFIG_SND=y
++CONFIG_SND_TIMER=y
++CONFIG_SND_PCM=y
++CONFIG_SND_HWDEP=y
++CONFIG_SND_RAWMIDI=y
++CONFIG_SND_OSSEMUL=y
++CONFIG_SND_MIXER_OSS=y
++CONFIG_SND_PCM_OSS=y
++CONFIG_SND_PCM_OSS_PLUGINS=y
++CONFIG_SND_PCM_TIMER=y
++# CONFIG_SND_DYNAMIC_MINORS is not set
++# CONFIG_SND_SUPPORT_OLD_API is not set
++CONFIG_SND_PROC_FS=y
++CONFIG_SND_VERBOSE_PROCFS=y
++CONFIG_SND_CTL_FAST_LOOKUP=y
++# CONFIG_SND_DEBUG is not set
++# CONFIG_SND_CTL_INPUT_VALIDATION is not set
++# CONFIG_SND_UTIMER is not set
++# CONFIG_SND_SEQUENCER is not set
++CONFIG_SND_DRIVERS=y
++# CONFIG_SND_DUMMY is not set
++# CONFIG_SND_ALOOP is not set
++# CONFIG_SND_MTPAV is not set
++# CONFIG_SND_SERIAL_U16550 is not set
++# CONFIG_SND_MPU401 is not set
++
++#
++# HD-Audio
++#
++# end of HD-Audio
++
++CONFIG_SND_SPI=y
++CONFIG_SND_USB=y
++CONFIG_SND_USB_AUDIO=y
++# CONFIG_SND_USB_AUDIO_MIDI_V2 is not set
++# CONFIG_SND_USB_UA101 is not set
++# CONFIG_SND_USB_CAIAQ is not set
++# CONFIG_SND_USB_6FIRE is not set
++# CONFIG_SND_USB_HIFACE is not set
++# CONFIG_SND_BCD2000 is not set
++# CONFIG_SND_USB_POD is not set
++# CONFIG_SND_USB_PODHD is not set
++# CONFIG_SND_USB_TONEPORT is not set
++# CONFIG_SND_USB_VARIAX is not set
++# CONFIG_SND_SOC is not set
+ CONFIG_HID_SUPPORT=y
+ CONFIG_HID=y
+ # CONFIG_HID_BATTERY_STRENGTH is not set
+@@ -2667,6 +2716,7 @@ CONFIG_HID_CHICONY=y
+ # CONFIG_HID_CORSAIR is not set
+ # CONFIG_HID_COUGAR is not set
+ # CONFIG_HID_MACALLY is not set
++# CONFIG_HID_PRODIKEYS is not set
+ # CONFIG_HID_CMEDIA is not set
+ # CONFIG_HID_CP2112 is not set
+ # CONFIG_HID_CREATIVE_SB0540 is not set
+@@ -4679,6 +4729,7 @@ CONFIG_AUDIT_ARCH_COMPAT_GENERIC=y
+ # CONFIG_RANDOM32_SELFTEST is not set
+ # CONFIG_XZ_DEC is not set
+ CONFIG_GENERIC_ALLOCATOR=y
++CONFIG_XARRAY_MULTI=y
+ CONFIG_ASSOCIATIVE_ARRAY=y
+ CONFIG_HAS_IOMEM=y
+ CONFIG_HAS_IOPORT=y
+diff --git a/rootfs-radxacm5io.tar.gz b/rootfs-radxacm5io.tar.gz
+index 83b5947..ddd3459 100644
+Binary files a/rootfs-radxacm5io.tar.gz and b/rootfs-radxacm5io.tar.gz differ
+diff --git a/www/index.html b/www/index.html
+index 8e2b61f..dba9744 100644
+--- a/www/index.html
++++ b/www/index.html
+@@ -91,7 +91,7 @@ and for specific platforms, including the kernel:
+ - &lt;a href=rootfs-pinebookpro.tar.gz download&gt;pinebook pro&lt;/a&gt; [14Mb]
+ - &lt;a href=rootfs-rpi3b+.tar.gz download&gt;raspberry pi 3b+&lt;/a&gt; [35Mb]
+ - &lt;a href=rootfs-rpi-cm5io.tar.gz download&gt;raspberry pi cm5 + io board&lt;/a&gt; [51Mb]
+-- &lt;a href=rootfs-radxacm5io.tar.gz download&gt;radxa cm5 + io&lt;/a&gt; [26Mb]
++- &lt;a href=rootfs-radxacm5io.tar.gz download&gt;radxa cm5 + io&lt;/a&gt; [27Mb]
+ 
+ 
+ &lt;i&gt;docker&lt;/i&gt;
+diff --git a/www/rootfs-radxacm5io.tar.gz b/www/rootfs-radxacm5io.tar.gz
+index 83b5947..ddd3459 100644
+Binary files a/www/rootfs-radxacm5io.tar.gz and b/www/rootfs-radxacm5io.tar.gz differ
+</pre>

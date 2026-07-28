@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lin0 12d61da</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}</style>
+<pre>
+<a href=index.html>lin0</a> / <b>commit</b>
+
+<a href=log.html>log</a> | <a href=tree.html>tree</a> | <a href=refs.html>refs</a>
+
+commit 12d61da
+parent <a href=commit-fb9c98f.html>fb9c98f</a> 
+author myr &lt;brian@myr.sh&gt;
+date   2024-09-22T19:19:05-03:00
+
+    Added docker hub image
+
+    - renamed aarch64 to arm64
+
+<a href=tree-12d61da.html>tree</a>
+
+<b>diff</b>
+
+diff --git a/index.html b/index.html
+index 5a3585d..ec78ade 100644
+--- a/index.html
++++ b/index.html
+@@ -48,8 +48,22 @@ if you don't want to build the whole system we
+ provide a tarball without the kernel so you can
+ build just the kernel, or copy it from somewhere.
+ 
++
++&lt;i&gt;tarballs&lt;/i&gt;
++
+ - &lt;a href=rootfs-amd64.tar.xz download&gt;rootfs.tar.xz (amd64)&lt;/a&gt;
+-- &lt;a href=rootfs-aarch64.tar.xz download&gt;rootfs.tar.xz (aarch64)&lt;/a&gt;
++- &lt;a href=rootfs-arm64.tar.xz download&gt;rootfs.tar.xz (arm64)&lt;/a&gt;
++
++
++&lt;i&gt;docker&lt;/i&gt;
++
++we also provide docker images for quick testing or
++for building applications. this image features an
++easy way to use the tcc compiler.
++
++	docker push bleemayer/lin0:latest
++
++architectures supported are the same as tarballs.
+ 
+ 
+ &lt;b&gt;usage&lt;/b&gt;
+diff --git a/rootfs-aarch64.tar.xz b/rootfs-arm64.tar.xz
+similarity index 72%
+rename from rootfs-aarch64.tar.xz
+rename to rootfs-arm64.tar.xz
+index 3cf2e3a..1c7cdba 100644
+Binary files a/rootfs-aarch64.tar.xz and b/rootfs-arm64.tar.xz differ
+</pre>

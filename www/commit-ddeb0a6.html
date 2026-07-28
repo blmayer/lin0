@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lin0 ddeb0a6</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}</style>
+<pre>
+<a href=index.html>lin0</a> / <b>commit</b>
+
+<a href=log.html>log</a> | <a href=tree.html>tree</a> | <a href=refs.html>refs</a>
+
+commit ddeb0a6
+parent <a href=commit-eaba8cd.html>eaba8cd</a> 
+author myr &lt;myr@terminal.pink&gt;
+date   2024-10-05T23:45:36-03:00
+
+    added patch for tcc
+
+<a href=tree-ddeb0a6.html>tree</a>
+
+<b>diff</b>
+
+diff --git a/make.sh b/make.sh
+index 2a6b6b0..43379ce 100755
+--- a/make.sh
++++ b/make.sh
+@@ -4,12 +4,11 @@ set -e
+ arch="$(uname -m)"
+ 
+ muslver="1.2.5"
+-tccver="0.9.27"
+ linuxver="6.11"
+ sslver="3.9.2"
+ 
+ muslurl="https://musl.libc.org/releases/musl-$muslver.tar.gz"
+-tccurl="https://mirror.marwan.ma/savannah/tinycc/tcc-$tccver.tar.bz2"
++tccurl="https://repo.or.cz/tinycc.git"
+ linuxurl="https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$linuxver.tar.xz"
+ toyboxurl="https://github.com/landley/toybox.git"
+ mkshurl="http://www.mirbsd.org/MirOS/dist/mir/mksh/mksh-R59c.tgz"
+@@ -36,12 +35,16 @@ cd build
+ 
+ export CC="$(realpath ../rootfs/bin/musl-gcc)"
+ 
+-[ -d "tcc-$tccver" ] || {
++[ -d "tinycc" ] || {
+ 	echo "building tcc..."
+-	curl "$tccurl" | tar xj
+-	cd "tcc-$tccver"
+-	./configure --prefix=/home/lord/git/lin0/rootfs --cc="$CC" --config-musl --elfinterp=/lib/libc.so --sysincludepaths=/include --libpaths=/lib --crtprefix=/lib --disable-static
+-	make &amp;&amp; make install
++	git clone "$tccurl"
++	cd "tinycc"
++	
++	echo "applying patch"
++	git apply ../../patches/tcc-*.patch
++
++	./configure --prefix=/ --cc="$CC" --config-musl --elfinterp=/lib/libc.so --sysincludepaths=/include --libpaths=/lib --crtprefix=/lib --disable-static --disable-rpath
++	make &amp;&amp; make DESTDIR=../../rootfs install
+ 	cat &lt;&lt;- EOF &gt; ../../rootfs/bin/ar
+ 	#!/bin/sh
+ 	cc -ar $@
+diff --git a/patches/tcc-0001-added-ld-path-for-build-commands.patch b/patches/tcc-0001-added-ld-path-for-build-commands.patch
+new file mode 100644
+index 0000000..fb5868f
+--- /dev/null
++++ b/patches/tcc-0001-added-ld-path-for-build-commands.patch
+@@ -0,0 +1,45 @@
++From 6ddc45c082ae2ffa560530fc409db5d585b84b96 Mon Sep 17 00:00:00 2001
++From: myr &lt;myr@terminal.pink&gt;
++Date: Sat, 5 Oct 2024 23:41:02 -0300
++Subject: [PATCH] added ld path for build commands
++
++---
++ Makefile     | 2 +-
++ lib/Makefile | 4 ++--
++ 2 files changed, 3 insertions(+), 3 deletions(-)
++
++diff --git a/Makefile b/Makefile
++index 13260d07..61380142 100644
++--- a/Makefile
+++++ b/Makefile
++@@ -276,7 +276,7 @@ endif
++ 
++ # convert "include/tccdefs.h" to "tccdefs_.h"
++ %_.h : include/%.h conftest.c
++-	$S$(CC) -DC2STR $(filter %.c,$^) -o c2str.exe &amp;&amp; ./c2str.exe $&lt; $@
+++	$S$(CC) -DC2STR $(filter %.c,$^) -o c2str.exe &amp;&amp; ../musl-1.2.5/lib/libc.so ./c2str.exe $&lt; $@
++ 
++ # target specific object rule
++ $(X)%.o : %.c $(LIBTCC_INC)
++diff --git a/lib/Makefile b/lib/Makefile
++index c95a3e30..88f5bf6f 100644
++--- a/lib/Makefile
+++++ b/lib/Makefile
++@@ -8,12 +8,12 @@ VPATH = $(TOPSRC)/lib $(TOPSRC)/win32/lib
++ T = $(or $(CROSS_TARGET),$(NATIVE_TARGET),unknown)
++ X = $(if $(CROSS_TARGET),$(CROSS_TARGET)-)
++ 
++-XTCC ?= $(TOP)/$(X)tcc$(EXESUF)
+++XTCC ?= LD_LIBRARY_PATH=.. ../../musl-1.2.5/lib/libc.so $(TOP)/$(X)tcc$(EXESUF)
++ XCC = $(XTCC)
++ XAR = $(XTCC) -ar
++ XFLAGS-unx = -B$(TOPSRC)
++ XFLAGS-win = -B$(TOPSRC)/win32 -I$(TOPSRC)/include
++-XFLAGS = $(XFLAGS$(XCFG)) -I$(TOP)
+++XFLAGS = $(XFLAGS$(XCFG)) -I$(TOP) -I$(TOP)/../../rootfs/include
++ BFLAGS = -bt
++ XCFG = $(or $(findstring -win,$T),-unx)
++ S = $(if $(findstring yes,$(SILENT)),@$(info * $@))
++-- 
++2.46.2
++
+</pre>

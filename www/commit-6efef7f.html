@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lin0 6efef7f</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}</style>
+<pre>
+<a href=index.html>lin0</a> / <b>commit</b>
+
+<a href=log.html>log</a> | <a href=tree.html>tree</a> | <a href=refs.html>refs</a>
+
+commit 6efef7f
+parent <a href=commit-9e66133.html>9e66133</a> 
+author myr &lt;myr@terminal.pink&gt;
+date   2024-10-16T17:56:21-03:00
+
+    make.sh: adjusted some paths and added a cleanup
+
+<a href=tree-6efef7f.html>tree</a>
+
+<b>diff</b>
+
+diff --git a/make.sh b/make.sh
+index 43379ce..8a53105 100755
+--- a/make.sh
++++ b/make.sh
+@@ -5,7 +5,6 @@ arch="$(uname -m)"
+ 
+ muslver="1.2.5"
+ linuxver="6.11"
+-sslver="3.9.2"
+ 
+ muslurl="https://musl.libc.org/releases/musl-$muslver.tar.gz"
+ tccurl="https://repo.or.cz/tinycc.git"
+@@ -25,10 +24,10 @@ cd build
+ 	make &amp;&amp; make install
+ 	make obj/musl-gcc
+ 	sed -i "s@ld-musl-$arch.so.1@libc.so@" ../../rootfs/lib/musl-gcc.specs
+-	#
++
+ 	# create missing links
+-	ln -sv ../../rootfs/lib/libc.so ../../rootfs/bin/ldd
+-	ln -sv ../../rootfs/lib/libc.so ../../rootfs/bin/ld
++	ln -srv ../../rootfs/lib/libc.so ../../rootfs/bin/ldd
++	ln -srv ../../rootfs/lib/libc.so ../../rootfs/bin/ld
+ 
+ 	cd ..
+ }
+@@ -101,7 +100,7 @@ postinstall="../scripts/post-install-$platform.sh"
+ cd ../
+ 
+ echo "copying files"
+-mkdir -p rootfs/etc rootfs/sbin rootfs/dev rootfs/sys rootfs/proc rootfs/var/run
++mkdir -p rootfs/etc rootfs/sbin rootfs/dev rootfs/sys rootfs/proc rootfs/var/run rootfs/home/root
+ cp -r etc rootfs/etc
+ cp init rootfs/sbin
+ 
+@@ -114,5 +113,9 @@ echo "copying extra packages"
+ 	done
+ }
+ 
++echo "cleaning up some files"
++rm rootfs/lib/musl-gcc.specs
++rm rootfs/bin/musl-gcc
++
+ echo "compressing rootfs..."
+ tar cfJ "rootfs-$platform.tar.xz" rootfs/*
+diff --git a/scripts/post-install-hpelitedesk.sh b/scripts/post-install-hpelitedesk.sh
+index ae6a1bf..1a8f7b9 100755
+--- a/scripts/post-install-hpelitedesk.sh
++++ b/scripts/post-install-hpelitedesk.sh
+@@ -4,9 +4,11 @@
+ [ -d ../linux-firmware ] || git clone https://kernel.googlesource.com/pub/scm/linux/kernel/git/firmware/linux-firmware.git
+ cd "linux-$linuxver"
+ make -j 4
+-[ -d ../rootfs/boot ] || mkdir ../rootfs/boot
++[ -d ../../rootfs/boot ] || mkdir ../../rootfs/boot
+ make INSTALL_MOD_PATH=../../rootfs INSTALL_PATH=../../rootfs/boot install modules_install
++cd ..
+ 
+-[ -d ../rootfs/firmware ] || mkdir ../rootfs/firmware
+-cp ../linux-firmware/LICENSE.iwlwifi_firmware ../../firmware
++echo "copying firmware license"
++[ -d ../rootfs/lib/firmware ] || mkdir ../rootfs/lib/firmware
++cp linux-firmware/LICENSE.iwlwifi_firmware ../rootfs/lib/firmware
+ cd ..
+</pre>

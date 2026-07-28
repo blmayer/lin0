@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lin0 8c8dbe4</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}</style>
+<pre>
+<a href=index.html>lin0</a> / <b>commit</b>
+
+<a href=log.html>log</a> | <a href=tree.html>tree</a> | <a href=refs.html>refs</a>
+
+commit 8c8dbe4
+parent <a href=commit-3ac4608.html>3ac4608</a> 
+author myr &lt;myr@terminal.pink&gt;
+date   2025-02-16T12:47:14-03:00
+
+    Adjusted etc files and init
+
+<a href=tree-8c8dbe4.html>tree</a>
+
+<b>diff</b>
+
+diff --git a/etc/issue b/etc/issue
+index fac9549..75856f3 100644
+--- a/etc/issue
++++ b/etc/issue
+@@ -1,7 +1,7 @@
+ 	+-------------------------------------------------------------------+
+ 	|                                                                   |
+ 	|                 _._                                               |
+-	|               e/` '\\,.eo-__.        Welcome to LIN0 v0.0.1!       |
++	|               e/` '\\,.eo-__.        Welcome to LIN0 v0.0.2!       |
+ 	|              '/.' .|_/e--. '\\e                                    |
+ 	|        ,;-o-.'|`  //e    e\\ |`      This software is licensed     |
+ 	|      ./' ,e0\\o   //-o.__. ,. \\'     under the BSD 2-clause        |
+@@ -12,7 +12,7 @@
+ 	|    `|e`|'    | # /    `|.  |`|`                                   |
+ 	|    e|` `    /\\- ,\\    e|'  '\\`                                    |
+ 	|     '`    _/  / / \\     `  `|'                                    |
+-	|       .,wW'^^^//;^-^;^;w_           (C) 2023-24 Brian Mayer       |
++	|       .,wW'^^^//;^-^;^;w_           (C) 2023-25 Brian Mayer       |
+ 	|                                                                   |
+ 	|                                                                   |
+ 	+-------------------------------------------------------------------+
+diff --git a/init b/init
+index 4c2bc14..5dfae86 100644
+--- a/init
++++ b/init
+@@ -8,4 +8,4 @@ mount -t tmpfs /tmp /run
+ mount -t tmpfs /var/run /var/run
+ mount -t vfat /dev/mmcblk0p1 /boot
+ 
+-exec getty 115200 /dev/tty1 linux
++exec getty 115200 /dev/tty0 linux
+</pre>

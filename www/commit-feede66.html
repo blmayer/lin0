@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lin0 feede66</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}</style>
+<pre>
+<a href=index.html>lin0</a> / <b>commit</b>
+
+<a href=log.html>log</a> | <a href=tree.html>tree</a> | <a href=refs.html>refs</a>
+
+commit feede66
+parent <a href=commit-0c95da4.html>0c95da4</a> 
+author myr &lt;myr@terminal.pink&gt;
+date   2024-09-24T11:47:38-03:00
+
+    rootfs: added hp elite desk
+
+    - updated index page
+    - improved scripts
+
+<a href=tree-feede66.html>tree</a>
+
+<b>diff</b>
+
+diff --git a/index.html b/index.html
+index 250d80b..8387a23 100644
+--- a/index.html
++++ b/index.html
+@@ -59,6 +59,7 @@ there are generic ones, without the linux kernel:
+ 
+ and for specific platforms, that include the kernel:
+ 
++- &lt;a href=rootfs-hpelitedesk.tar.xz download&gt;rootfs.tar.xz (hp elite desk)&lt;/a&gt;
+ - &lt;a href=rootfs-pinebookpro.tar.xz download&gt;rootfs.tar.xz (pinebook pro)&lt;/a&gt;
+ 
+ 
+diff --git a/rootfs-hpelitedesk.tar.xz b/rootfs-hpelitedesk.tar.xz
+new file mode 100644
+index 0000000..a1f2da2
+Binary files /dev/null and b/rootfs-hpelitedesk.tar.xz differ
+diff --git a/scripts/post-install-hpelitedesk.sh b/scripts/post-install-hpelitedesk.sh
+index 3e5f077..ae6a1bf 100755
+--- a/scripts/post-install-hpelitedesk.sh
++++ b/scripts/post-install-hpelitedesk.sh
+@@ -1,13 +1,12 @@
+ #!/bin/sh
+ 
+ # make kernel
+-mkdir ../rootfs/boot
++[ -d ../linux-firmware ] || git clone https://kernel.googlesource.com/pub/scm/linux/kernel/git/firmware/linux-firmware.git
+ cd "linux-$linuxver"
+ make -j 4
+-make INSTALL_MOD_PATH=../../rootfs/lib INSTALL_PATH=../../rootfs/boot install modules_install
+-cd ..
++[ -d ../rootfs/boot ] || mkdir ../rootfs/boot
++make INSTALL_MOD_PATH=../../rootfs INSTALL_PATH=../../rootfs/boot install modules_install
+ 
+-# install iw firmware
+-git clone https://kernel.googlesource.com/pub/scm/linux/kernel/git/firmware/linux-firmware.git
+-mkdir ../rootfs/lib/firmware
+-cp linux-firmware/iwlwifi-7260-17.ucode ../rootfs/lib/firmware
++[ -d ../rootfs/firmware ] || mkdir ../rootfs/firmware
++cp ../linux-firmware/LICENSE.iwlwifi_firmware ../../firmware
++cd ..
+diff --git a/scripts/post-install-pinebookpro.sh b/scripts/post-install-pinebookpro.sh
+index fdc317a..5717dc9 100755
+--- a/scripts/post-install-pinebookpro.sh
++++ b/scripts/post-install-pinebookpro.sh
+@@ -7,7 +7,8 @@ make -j 4
+ make INSTALL_MOD_PATH=../../rootfs INSTALL_PATH=../../rootfs/boot install modules_install
+ cd ..
+ 
+-# install iw firmware
++# install brcm firmware
+ git clone https://kernel.googlesource.com/pub/scm/linux/kernel/git/firmware/linux-firmware.git
+ [ -d ../rootfs/lib/firmware/brcm ] || mkdir -p ../rootfs/lib/firmware/brcm
+ cp linux-firmware/brcm/brcmfmac43430a0-sdio.bin ../rootfs/lib/firmware/brcm/
++cp linux-firmware/brcm/LICENSE.broadcom_bcm43xx ../rootfs/lib/firmware/brcm/
+</pre>

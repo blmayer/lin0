@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lin0 3ac4608</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}</style>
+<pre>
+<a href=index.html>lin0</a> / <b>commit</b>
+
+<a href=log.html>log</a> | <a href=tree.html>tree</a> | <a href=refs.html>refs</a>
+
+commit 3ac4608
+parent <a href=commit-7a87bd8.html>7a87bd8</a> 
+author myr &lt;myr@terminal.pink&gt;
+date   2025-01-16T22:32:51-03:00
+
+    updated index page
+
+<a href=tree-3ac4608.html>tree</a>
+
+<b>diff</b>
+
+diff --git a/index.html b/index.html
+index 421ed7c..08ef63d 100644
+--- a/index.html
++++ b/index.html
+@@ -33,7 +33,8 @@ scratch:
+ 
+ all the rest is optional and can be built from
+ this if needed. we provide optimized configurations
+-for some platforms.
++for some platforms, lin0 also gives you, for your
++convenience, much needed programs: make and curl.
+ 
+ 
+ &lt;b&gt;release notes&lt;/b&gt;
+@@ -42,6 +43,20 @@ v0.0.2: improved compiler toolchain
+ v0.0.1: initial release
+ 
+ 
++&lt;b&gt;roadmap&lt;/b&gt;
++
++features that may fit lin0:
++
++- make system compile itself
++- improve rpi3b+ rootfs
++- support mod loading and daemons in init script
++- improve issue file or provide a login program: ly
++- create man pages
++- support rpi zero w
++- support rpi cm5
++- add lin0 to fetch &lt;i&gt;et al&lt;/i&gt; commands
++
++
+ &lt;b&gt;images&lt;/b&gt;
+ 
+ if you don't want to build the whole system we
+@@ -81,13 +96,6 @@ way to use musl libc and the tcc compiler.
+ architectures supported are the same as tarballs.
+ 
+ 
+-&lt;b&gt;usage&lt;/b&gt;
+-
+-after built the system should boot to a login
+-prompt, the default user is root and password is
+-lin0.
+-
+-
+ &lt;b&gt;installation&lt;/b&gt;
+ 
+ 
+@@ -106,7 +114,7 @@ the installation is a 3-step process:
+ - copy the generated rootfs to your target system
+ 
+ the installer will copy any extra packages present
+-at the pkg folder to your rootfs/share/pkg folder.
++at the pkg folder to your /home/root/ folder.
+ 
+ 
+ &lt;i&gt;from tarball&lt;/i&gt;
+@@ -116,18 +124,33 @@ it to your destination partition. then copy your
+ kernel to the boot folder.
+ 
+ 
+-&lt;b&gt;roadmap&lt;/b&gt;
++&lt;b&gt;usage&lt;/b&gt;
+ 
+-features that may fit lin0:
++after built the system should boot to a login
++prompt, the default user is root and password is
++lin0.
+ 
+-- make system compile itself
+-- improve rpi3b+ rootfs
+-- support mod loading and daemons in init script
+-- improve issue file or provide a login program: ly
+-- create man pages
+-- support rpi zero w
+-- support rpi cm5
+-- add lin0 to fetch &lt;i&gt;et al&lt;/i&gt; commands
++however, your lin0 system is not ready yet for real
++work: some configuration is needed, since we don't
++want to give you a default. hence, you need to:
++
++- create the /etc/resolv.conf file
++- add more users
++- change the default password
++- install needed software, e.g. wpa_supplicant
++
++the rest is up to you. welcome to lin0!
++
++
++&lt;b&gt;getting help&lt;/b&gt;
++
++use the mailing list, to ask a question just send
++an email to:
++
++lin0 AT terminal DOT pink
++
++i plan to create a wiki to let users contribute
++easily.
+ 
+ 
+ &lt;b&gt;license&lt;/b&gt;
+</pre>

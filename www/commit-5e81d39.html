@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lin0 5e81d39</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}</style>
+<pre>
+<a href=index.html>lin0</a> / <b>commit</b>
+
+<a href=log.html>log</a> | <a href=tree.html>tree</a> | <a href=refs.html>refs</a>
+
+commit 5e81d39
+parent <a href=commit-0db9ed3.html>0db9ed3</a> 
+author myr &lt;myr@terminal.pink&gt;
+date   2024-09-28T23:04:10-03:00
+
+    Removed unsupported escapes from issue file
+
+<a href=tree-5e81d39.html>tree</a>
+
+<b>diff</b>
+
+diff --git a/etc/issue b/etc/issue
+index 3700969..fac9549 100644
+--- a/etc/issue
++++ b/etc/issue
+@@ -7,9 +7,9 @@
+ 	|      ./' ,e0\\o   //-o.__. ,. \\'     under the BSD 2-clause        |
+ 	|     ./` /' -/e   e\\o_/___.  \\|'     license.                      |
+ 	|     e|`/`,o-o\\  /v-/e_.  '\\. \\.                                   |
+-	|    '/  ._e._, \\ //    \\`  \\e |'     Current time is:              |
++	|    '/  ._e._, \\ //    \\`  \\e |'                                   |
+ 	|    '|'"/     \\.V |    `|' `|'|`                                   |
+-	|    `|e`|'    | # /    `|.  |`|`     \t \d     |
++	|    `|e`|'    | # /    `|.  |`|`                                   |
+ 	|    e|` `    /\\- ,\\    e|'  '\\`                                    |
+ 	|     '`    _/  / / \\     `  `|'                                    |
+ 	|       .,wW'^^^//;^-^;^;w_           (C) 2023-24 Brian Mayer       |
+diff --git a/make.sh b/make.sh
+index 8ff4b8a..e5d236b 100755
+--- a/make.sh
++++ b/make.sh
+@@ -11,7 +11,7 @@ sslver="3.9.2"
+ muslurl="https://musl.libc.org/releases/musl-$muslver.tar.gz"
+ tccurl="https://mirror.marwan.ma/savannah/tinycc/tcc-$tccver.tar.bz2"
+ linuxurl="https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$linuxver.tar.xz"
+-toyboxurl="https://codeload.github.com/landley/toybox/zip/refs/heads/master"
++toyboxurl="https://github.com/landley/toybox.git"
+ mkshurl="http://www.mirbsd.org/MirOS/dist/mir/mksh/mksh-R59c.tgz"
+ 
+ [ -d build ] || mkdir build
+@@ -70,11 +70,10 @@ export CC="$(realpath ../rootfs/bin/musl-gcc)"
+ 	cd ..
+ }
+ 
+-[ -d "toybox-master" ] || {
++[ -d "toybox" ] || {
+ 	echo "installing toybox..."
+-	curl "$toyboxurl" &gt; toybox.zip
+-	unzip toybox.zip
+-	cd toybox-master
++	git clone "$toyboxurl"
++	cd toybox
+ 	cp ../../configs/"$platform"-toybox.config .config
+ 	make toybox
+ 	make PREFIX=../../rootfs/bin install_flat
+</pre>

@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lin0 69821cb</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}</style>
+<pre>
+<a href=index.html>lin0</a> / <b>commit</b>
+
+<a href=log.html>log</a> | <a href=tree.html>tree</a> | <a href=refs.html>refs</a>
+
+commit 69821cb
+parent <a href=commit-72e4eaf.html>72e4eaf</a> 
+author Brian Mayer &lt;bleemayer@gmail.com&gt;
+date   2026-07-09T12:40:50-03:00
+
+    Make /etc/issue fetch-style and refresh platform rootfs tarballs.
+
+    Show the willow logo with aligned system fields and 16-color key labels,
+    sync updated issue/init/etc into published archives, and include related
+    init, hotplugd, and on-device tcc install fixes.
+
+<a href=tree-69821cb.html>tree</a>
+
+<b>diff</b>
+
+diff --git a/etc/issue b/etc/issue
+index 3dfa4b0..0a5ae74 100644
+--- a/etc/issue
++++ b/etc/issue
+@@ -1,16 +1,16 @@
+ 
+ 	             _._
+-	           e/` '\\,.eo-__.         Welcome to Lin0
+-	          '/.' .|_/e--. '\\e
+-	    ,;-o-.'|`  //e    e\\ |`       This software is licensed
+-	  ./' ,e0\\o   //-o.__. ,. \\'      under the BSD 2-clause license.
+-	 ./` /' -/e   e\\o_/___.  \\|'
+-	 e|`/`,o-o\\  /v-/e_.  '\\. \\.
+-	'/  ._e._, \\ //    \\`  \\e |'      (C) 2023-26 Brian Mayer
+-	'|'"/     \\.V |    `|' `|'|`
+-	`|e`|'    | # /    `|.  |`|`
+-	e|` `    /\\- ,\\    e|'  '\\`
+-	 '`    _/  / / \\     `  `|'
++	           e/` '\\,.eo-__.         \n
++	          '/.' .|_/e--. '\\e       -----------
++	    ,;-o-.'|`  //e    e\\ |`       [94mos[0m:      lin0
++	  ./' ,e0\\o   //-o.__. ,. \\'      [94mkernel[0m:  \s \r
++	 ./` /' -/e   e\\o_/___.  \\|'      [94march[0m:    \m
++	 e|`/`,o-o\\  /v-/e_.  '\\. \\.      [94mtty[0m:     \l
++	'/  ._e._, \\ //    \\`  \\e |'      [94mshell[0m:   mksh
++	'|'"/     \\.V |    `|' `|'|`      [94mlibc[0m:    musl
++	`|e`|'    | # /    `|.  |`|`      [94minit[0m:    /bin/init
++	e|` `    /\\- ,\\    e|'  '\\`       [94mcc[0m:      tcc
++	 '`    _/  / / \\     `  `|'       [94mlicense[0m: BSD-2-Clause
+ 	   .,wW'^^^//;^-^;^;w_
+ 
+ 
+diff --git a/hotplugd b/hotplugd
+index cb77cce..aeaccd3 100755
+--- a/hotplugd
++++ b/hotplugd
+@@ -1,39 +1,54 @@
+ #!/bin/sh
+ # hotplugd — minimal mdev-style hotplug helper for lin0.
+ #
+-# Modes:
+-#   hotplugd -s     coldplug once (fix devices already present)
+-#   hotplugd -d     background poll loop (works without CONFIG_UEVENT_HELPER)
+-#   hotplugd        kernel usermode helper: ACTION/SUBSYSTEM/DEVNAME in env
++#   hotplugd -s     coldplug once
++#   hotplugd -d     poll loop (default on boards without UEVENT_HELPER)
++#   hotplugd        kernel usermode helper (ACTION/SUBSYSTEM/DEVNAME in env)
+ #
+-# Register the helper (needs CONFIG_UEVENT_HELPER=y):
+-#   echo /bin/hotplugd &gt; /proc/sys/kernel/hotplug
+-#
+-# Rules are hardcoded for now (input nodes → root:input 0660).
++# Hardcoded rules (numeric gids match etc/group):
++#   /dev/input/*  /dev/uinput  → 0:45 (input)  0660
++#   /dev/fb*      /dev/dri/*   → 0:44 (video)  0660
+ 
+ export PATH=/bin
+ 
+-# --- rules (hardcoded; make config-driven later) ----------------------------
++# etc/group: video:x:44:  input:x:45:
++VIDEO_GID=44
++INPUT_GID=45
+ 
+-# /dev/input/* and /dev/uinput → group input (gid 45), mode 0660
+-rule_input() {
+-	_node=$1
+-	[ -e "$_node" ] || return 0
+-	case "$_node" in
+-	/dev/input/*|/dev/uinput)
+-		chown root:input "$_node" 2&gt;/dev/null
+-		chmod 660 "$_node" 2&gt;/dev/null
+-		;;
+-	esac
++fix_node() {
++	# $1=path  $2=gid
++	[ -e "$1" ] || return 0
++	[ -c "$1" ] || [ -b "$1" ] || return 0
++	chown "0:$2" "$1" || return 0
++	chmod 660 "$1" || true
+ }
+ 
+-apply_input_all() {
+-	for _n in /dev/input/* /dev/uinput; do
+-		rule_input "$_n"
++apply_all() {
++	if [ -d /dev/input ]; then
++		chown "0:$INPUT_GID" /dev/input 2&gt;/dev/null || true
++		chmod 755 /dev/input 2&gt;/dev/null || true
++		for n in /dev/input/*; do
++			[ -e "$n" ] || continue
++			fix_node "$n" "$INPUT_GID"
++		done
++	fi
++	fix_node /dev/uinput "$INPUT_GID"
++
++	for n in /dev/fb*; do
++		[ -e "$n" ] || continue
++		fix_node "$n" "$VIDEO_GID"
+ 	done
++
++	if [ -d /dev/dri ]; then
++		chown "0:$VIDEO_GID" /dev/dri 2&gt;/dev/null || true
++		chmod 755 /dev/dri 2&gt;/dev/null || true
++		for n in /dev/dri/*; do
++			[ -e "$n" ] || continue
++			fix_node "$n" "$VIDEO_GID"
++		done
++	fi
+ }
+ 
+-# One kernel uevent (usermode helper path).
+ handle_uevent() {
+ 	case "${ACTION:-}" in
+ 	add|change) ;;
+@@ -42,45 +57,40 @@ handle_uevent() {
+ 
+ 	case "${SUBSYSTEM:-}" in
+ 	input|hid)
+-		[ -n "${DEVNAME:-}" ] &amp;&amp; rule_input "/dev/$DEVNAME"
+-		# Parent "input" events often have no DEVNAME; sweep the class.
+-		apply_input_all
++		[ -n "${DEVNAME:-}" ] &amp;&amp; fix_node "/dev/$DEVNAME" "$INPUT_GID"
++		apply_all
++		;;
++	graphics|drm|fb)
++		[ -n "${DEVNAME:-}" ] &amp;&amp; fix_node "/dev/$DEVNAME" "$VIDEO_GID"
++		apply_all
+ 		;;
+ 	esac
+ }
+ 
+-# --- entry points -----------------------------------------------------------
+-
+ case "${1:-}" in
+ -s|--scan)
+-	apply_input_all
++	apply_all
+ 	exit 0
+ 	;;
+ -d|--daemon)
+ 	while true; do
+-		apply_input_all
+-		sleep 2
++		apply_all
++		sleep 1
+ 	done
+ 	;;
+ -h|--help)
+-	cat &lt;&lt;'HELP'
+-hotplugd — simple mdev-like hotplug for lin0
+-
+-  hotplugd -s     apply rules to devices already present (coldplug)
+-  hotplugd -d     polling daemon (no kernel helper required)
+-  hotplugd        kernel usermode helper (ACTION/SUBSYSTEM/DEVNAME in env)
+-
+-  echo /bin/hotplugd &gt; /proc/sys/kernel/hotplug   # if CONFIG_UEVENT_HELPER=y
+-HELP
++	printf '%s\n' \
++		'hotplugd -s     coldplug' \
++		'hotplugd -d     poll daemon' \
++		'hotplugd        kernel helper (env ACTION/SUBSYSTEM/DEVNAME)' \
++		'rules: input→gid 45, fb/dri→gid 44 (see /etc/group)'
+ 	exit 0
+ 	;;
+ esac
+ 
+-# Kernel helper invocation (or manual test with env set).
+ if [ -n "${ACTION:-}" ] || [ -n "${SUBSYSTEM:-}" ]; then
+ 	handle_uevent
+ 	exit 0
+ fi
+ 
+-# Default: one-shot scan (same as -s).
+-apply_input_all
++apply_all
+diff --git a/init b/init
+index 1ead871..23ccc9b 100755
+--- a/init
++++ b/init
+@@ -9,18 +9,19 @@ trap 'sync; reboot -f' TERM
+ trap 'sync; halt -f' USR1
+ 
+ mount -t proc proc /proc
+-dmesg -n 1
+ mount -t sysfs sysfs /sys
+ mount -t tmpfs tmpfs /run
+ mount -t tmpfs tmpfs /var/run
+-# world-writable sticky; configure scripts and shells need this
+-mount -t tmpfs -o mode=1777 tmpfs /tmp
+-mount -t devtmpfs devtmpfs /dev
++mount -t devtmpfs -o mode=1777 devtmpfs /dev
+ mkdir -p /dev/pts /dev/shm
+ mount -t devpts devpts -o gid=5,mode=0620 /dev/pts
+-mount -t tmpfs -o mode=1777 tmpfs /dev/shm
++# /dev/shm is always a mount; force mode after mount.
++mount -t tmpfs tmpfs /dev/shm
++chmod 1777 /dev/shm
+ mount -t vfat /dev/mmcblk0p1 /boot
+ 
++dmesg -n 1
++
+ # kernel utsname; /etc/hostname alone is not enough for gethostname()
+ [ -s /etc/hostname ] &amp;&amp; hostname -F /etc/hostname
+ 
+@@ -38,10 +39,6 @@ modprobe mac80211
+ modprobe rfkill
+ modprobe rtl8xxxu
+ 
+-# Coldplug then poll: poll covers boards without UEVENT_HELPER and late USB.
+-hotplugd -s
+-hotplugd -d &amp;
+-
+ clear
+ while true; do
+ 	getty 115200 tty0 linux
+diff --git a/rootfs-radxacm5io.tar.xz b/rootfs-radxacm5io.tar.xz
+index da2f9f8..1dbc691 100644
+Binary files a/rootfs-radxacm5io.tar.xz and b/rootfs-radxacm5io.tar.xz differ
+diff --git a/scripts/make-target.sh b/scripts/make-target.sh
+index e24df11..c196b6c 100755
+--- a/scripts/make-target.sh
++++ b/scripts/make-target.sh
+@@ -16,13 +16,16 @@ cd /tmp/tinycc
+ 	--extra-ldflags='-Wl,-dynamic-linker,/lib/ld-musl-aarch64.so.1' \
+ 	--sysincludepaths=/include \
+ 	--config-musl \
+-	--libpaths=/lib \
++	--libpaths='{B}:/lib' \
+ 	--elfinterp=/lib/ld-musl-aarch64.so.1 \
+ 	--crtprefix=/lib \
+ 	--tccdir=/lib/tcc \
+ 	--config-bcheck=no
+ # Ensure dynamic musl link (configure may default LDFLAGS=-static for *gcc* names).
+ sed -i 's|^LDFLAGS=.*|LDFLAGS=-Wl,-dynamic-linker,/lib/ld-musl-aarch64.so.1|' config.mak
++# Drop a previous flat tccdir=/lib install if present.
++rm -f /lib/libtcc1.a /lib/runmain.o /lib/bt-exe.o /lib/bt-log.o /lib/bt-dll.o /lib/bcheck.o
++rm -rf /lib/include
+ make &amp;&amp; make install
+ # Keep argv0 as tcc so libtool matches tcc*); POSIX cc is a symlink.
+ ln -sfn tcc /bin/cc
+diff --git a/www/rootfs-arm64.tar.xz b/www/rootfs-arm64.tar.xz
+index 1c7cdba..9975fdd 100644
+Binary files a/www/rootfs-arm64.tar.xz and b/www/rootfs-arm64.tar.xz differ
+diff --git a/www/rootfs-hpelitedesk.tar.xz b/www/rootfs-hpelitedesk.tar.xz
+index 65385d9..061a412 100644
+Binary files a/www/rootfs-hpelitedesk.tar.xz and b/www/rootfs-hpelitedesk.tar.xz differ
+diff --git a/www/rootfs-pinebookpro.tar.xz b/www/rootfs-pinebookpro.tar.xz
+index bd499b2..4aaa259 100644
+Binary files a/www/rootfs-pinebookpro.tar.xz and b/www/rootfs-pinebookpro.tar.xz differ
+diff --git a/www/rootfs-rpi-cm5io.tar.xz b/www/rootfs-rpi-cm5io.tar.xz
+index f622904..e0d611e 100644
+Binary files a/www/rootfs-rpi-cm5io.tar.xz and b/www/rootfs-rpi-cm5io.tar.xz differ
+diff --git a/www/rootfs-rpi3b+.tar.xz b/www/rootfs-rpi3b+.tar.xz
+index 68c060d..0444893 100644
+Binary files a/www/rootfs-rpi3b+.tar.xz and b/www/rootfs-rpi3b+.tar.xz differ
+diff --git a/www/rootfs-x86_64.tar.xz b/www/rootfs-x86_64.tar.xz
+index 03a27dd..cdeaaee 100644
+Binary files a/www/rootfs-x86_64.tar.xz and b/www/rootfs-x86_64.tar.xz differ
+</pre>

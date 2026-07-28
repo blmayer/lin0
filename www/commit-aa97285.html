@@ -1,0 +1,1483 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lin0 aa97285</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}</style>
+<pre>
+<a href=index.html>lin0</a> / <b>commit</b>
+
+<a href=log.html>log</a> | <a href=tree.html>tree</a> | <a href=refs.html>refs</a>
+
+commit aa97285
+parent <a href=commit-58d8bd4.html>58d8bd4</a> 
+author Brian Mayer &lt;bleemayer@gmail.com&gt;
+date   2026-07-02T18:34:53-03:00
+
+    improved support for radxa cm5 + general improvements
+
+    - added bearssl
+    - added ca certs
+    - shrink radxa image size
+    - made toybox dynamically linked
+    - logo rework
+    - updated issue
+    - updated init
+    - added resolv.conf
+    - added hostname
+    - added patch for radxa rtc
+
+<a href=tree-aa97285.html>tree</a>
+
+<b>diff</b>
+
+diff --git a/Makefile b/Makefile
+index 4378b47..1c3d124 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,27 +1,20 @@
+-# lin0 — Makefile-only builds (real file prerequisites, no stamps)
++# lin0 — file prerequisites, literal paths, no stamps
+ #
+ #   make                 # host arch -&gt; rootfs-&lt;arch&gt;.tar.xz
+-#   make x86_64          # explicit platform
++#   make radxacm5io      # rootfs tarball + hybrid image
+ #   make list | help | clean | distclean
+-#
+-# Make rebuilds a target when it is missing or older than any prerequisite.
+-# Radxa: make radxacm5io  (RADXA_LINUXVER, RADXA_P3_MB, OFFICIAL_IMG / RADXA_OFFICIAL)
+ 
+ SHELL := /bin/sh
+ .SHELLFLAGS := -ec
+ 
+-REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+-BUILD     := $(REPO_ROOT)/build
+-ROOTFS    := $(REPO_ROOT)/rootfs
+-CONFIGS   := $(REPO_ROOT)/configs
+-SCRIPTS   := $(REPO_ROOT)/scripts
+-
+ MUSLVER    := 1.2.5
+ LINUXVER   := 6.13.3
+ MAKEVER    := 4.4.1
+ MKSHVER    := R59c
+-WOLFSSLVER := 5.7.6
+-CURLVER    := 8.4.0
++WOLFSSLVER  := 5.7.6
++CURLVER     := 8.4.0
++BEARSSLVER  := 0.6
++LIBTLS_BEARSSL_MAJOR := 33
+ 
+ MUSLURL    := https://musl.libc.org/releases/musl-$(MUSLVER).tar.gz
+ LINUXURL   := https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$(LINUXVER).tar.xz
+@@ -31,15 +24,27 @@ MKSHURL    := http://www.mirbsd.org/MirOS/dist/mir/mksh/mksh-$(MKSHVER).tgz
+ MAKEURL    := https://ftp.gnu.org/gnu/make/make-$(MAKEVER).tar.gz
+ WOLFSSLURL := https://github.com/wolfSSL/wolfssl/archive/refs/tags/v$(WOLFSSLVER)-stable.tar.gz
+ CURLURL    := https://curl.se/tiny/tiny-curl-$(CURLVER).tar.gz
++BEARSSLURL := https://bearssl.org/bearssl-$(BEARSSLVER).tar.gz
++LIBTLS_BEARSSL_URL := https://github.com/michaelforney/libtls-bearssl.git
+ REGDBURL   := https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/plain
++CACERT_URL := https://curl.se/ca/cacert.pem
++# Mozilla CA bundle via curl.se (mk-ca-bundle). Bump with the file.
++CACERT_SHA256 := 86a1f3366afac7c6f8ae9f3c779ac221129328c43f0ab2b8817eb2f362a5025c
++TLS_CFLAGS := -Os -fPIC -ffunction-sections -fdata-sections \
++	-fno-asynchronous-unwind-tables -fno-unwind-tables
++TLS_INCLUDE := $(CURDIR)/build/tls-include
++ROOTFS_LIBBEARSSL := rootfs/lib/libbearssl.so.$(BEARSSLVER)
++ROOTFS_LIBTLS := rootfs/lib/libtls.so.$(LIBTLS_BEARSSL_MAJOR)
++ROOTFS_TLS_LIBS := $(ROOTFS_LIBBEARSSL) $(ROOTFS_LIBTLS)
+ 
+ PLATFORMS  := aarch64 x86_64 hpelitedesk pinebookpro rpi3bplus rpi5 rpizero radxacm5io
+-STD_PLATS  := $(filter-out radxacm5io,$(PLATFORMS))
++AARCH64_PLATS := aarch64 arm64 radxacm5io rpi3bplus rpi5 pinebookpro rpi-cm5io m1mac
+ 
+ HOST_ARCH := $(shell uname -m)
+ ifeq ($(HOST_ARCH),arm64)
+   HOST_ARCH := aarch64
+ endif
++HOST_OS := $(shell uname -s)
+ 
+ PLATFORM ?= $(HOST_ARCH)
+ ifeq ($(PLATFORM),arm64)
+@@ -52,420 +57,389 @@ ifneq ($(filter $(PLATFORM),rpi-zero rpi-zero-w rpizero-w rpi0 rpi0w zerow),)
+   PLATFORM := rpizero
+ endif
+ 
+-export outdir := $(ROOTFS)
++export outdir := $(CURDIR)/rootfs
+ export PLATFORM
+ 
+-# --- source trees (prereq = configure/Makefile/.git marker files) ------------
+-
+-MUSL_SRC    := $(BUILD)/musl-$(MUSLVER)
+-LINUX_SRC   := $(BUILD)/linux-$(LINUXVER)
+-LINUX_TAR   := $(BUILD)/linux-$(LINUXVER).tar.xz
+-TOYBOX_SRC  := $(BUILD)/toybox
+-MAKE_SRC    := $(BUILD)/make-$(MAKEVER)
+-MKSH_SRC    := $(BUILD)/mksh
+-TCC_SRC     := $(BUILD)/tinycc
+-WOLFSSL_SRC := $(BUILD)/wolfssl-$(WOLFSSLVER)
+-CURL_SRC    := $(BUILD)/tiny-curl-$(CURLVER)
+-
+-$(BUILD):
+-	mkdir -p $@
++RADXA_LINUXVER   ?= master
++RADXA_P3_MB      ?= 128
++RADXA_P3_LBA     := 679936
++RADXA_DTB        := rk3588s-radxa-cm5-io.dtb
++RADXA_OFFICIAL   ?= build/official-radxa-inspect/radxa-cm5-io_bookworm_cli_b3.output.img
++RADXA_BUILDER    := lin0-radxacm5io-builder:latest
++RADXA_ROOT_LABEL := lin0root
++RADXA_ROOT_UUID  := a1ce5ba1-b0fe-43c3-b85c-eca170319b83
++RADXA_CMN        := console=tty0 rootwait rw init=/bin/init
+ 
+-$(MUSL_SRC)/configure: | $(BUILD)
+-	curl -fsSL "$(MUSLURL)" | tar xz -C $(BUILD)
++MUSL_ARCH = $(if $(filter $(PLATFORM),$(AARCH64_PLATS)),aarch64,$(if $(filter rpizero,$(PLATFORM)),arm,$(if $(filter hpelitedesk,$(PLATFORM)),x86_64,$(PLATFORM))))
++MUSL_LDSONAME := ld-musl-$(MUSL_ARCH).so.1
++ROOTFS_MUSL_LD := rootfs/lib/$(MUSL_LDSONAME)
++PLAT_CC := $(CURDIR)/rootfs/bin/musl-gcc
+ 
+-$(LINUX_TAR): | $(BUILD)
+-	curl -fsSL -o $@ "$(LINUXURL)"
++SKIP_CHROOT_radxacm5io := 1
++POST_TARGET_radxacm5io := radxacm5io-postinstall
++TOYBOX_CFLAGS := -Os -fPIE -I$(TLS_INCLUDE) $(TLS_CFLAGS)
++TOYBOX_LDFLAGS = -pie -L$(CURDIR)/rootfs/lib -Wl,--gc-sections -Wl,-rpath,/lib \
++	-ltls -lbearssl -Wl,-dynamic-linker,/lib/$(MUSL_LDSONAME)
++TOYBOX_STRIP := strip -s -R .note -R .comment
+ 
+-$(LINUX_SRC)/Makefile: $(LINUX_TAR)
+-	tar xf $(LINUX_TAR) -C $(BUILD)
++ETC_SRC := $(shell find etc \( -type f -o -type l \) ! -path 'etc/ssl/*')
++ROOTFS_ETC_SSL := rootfs/etc/ssl/cert.pem rootfs/etc/ssl/certs/ca-certificates.crt
++ROOTFS_ETC := $(patsubst etc/%,rootfs/etc/%,$(ETC_SRC)) $(ROOTFS_ETC_SSL)
+ 
+-$(TOYBOX_SRC)/.git: | $(BUILD)
+-	git clone "$(TOYBOXURL)" $(TOYBOX_SRC)
++INIT_COMMON := rootfs/bin/toybox $(ROOTFS_MUSL_LD) $(ROOTFS_TLS_LIBS) $(ROOTFS_ETC)
++INIT_DEPS = rootfs/bin/cc $(INIT_COMMON)
++INIT_DEPS_radxacm5io = rootfs/bin/musl-gcc rootfs/boot/Image $(INIT_COMMON)
++init_deps = $(or $(INIT_DEPS_$(PLATFORM)),$(INIT_DEPS))
+ 
+-$(MAKE_SRC)/configure: | $(BUILD)
+-	curl -fsSL "$(MAKEURL)" | tar xz -C $(BUILD)
++POST_EXTRA = rootfs/lib/libwolfssl.a rootfs/lib/libcurl.so
++POST_EXTRA_radxacm5io = rootfs/lib/firmware/regulatory.db
++post_extra = $(or $(POST_EXTRA_$(1)),$(POST_EXTRA))
+ 
+-$(MKSH_SRC)/Build.sh: | $(BUILD)
+-	curl -fsSL "$(MKSHURL)" | tar xz -C $(BUILD)
++# --- copy rules (repo file -&gt; rootfs file) ----------------------------------
+ 
+-$(TCC_SRC)/.git: | $(BUILD)
+-	rm -rf $(TCC_SRC)
+-	git clone "$(TCCURL)" $(TCC_SRC)
++rootfs/etc/%: etc/%
++	mkdir -p $(dir $@)
++	rm -f $@
++	cp -P $&lt; $@
++
++# CA bundle from curl.se (Mozilla certdata); not copied from etc/ssl.
++build/cacert.pem:
++	mkdir -p build
++	curl -fsSL "$(CACERT_URL)" -o build/cacert.pem.tmp
++	@cd build &amp;&amp; printf '%s  %s\n' "$(CACERT_SHA256)" cacert.pem.tmp &gt; cacert.pem.tmp.sha256
++	@cd build &amp;&amp; { command -v sha256sum &gt;/dev/null &amp;&amp; sha256sum -c cacert.pem.tmp.sha256 \
++		|| shasum -a 256 -c cacert.pem.tmp.sha256; }
++	mv -f build/cacert.pem.tmp build/cacert.pem
++	rm -f build/cacert.pem.tmp.sha256
++
++rootfs/etc/ssl/cert.pem rootfs/etc/ssl/certs/ca-certificates.crt: build/cacert.pem
++	mkdir -p $(dir $@)
++	rm -f $@
++	cp build/cacert.pem $@
+ 
+-$(WOLFSSL_SRC)/configure: | $(BUILD)
+-	curl -fsSL "$(WOLFSSLURL)" | tar xz -C $(BUILD)
++rootfs/bin/init: init $(init_deps)
++	mkdir -p $(dir $@) rootfs/home/root rootfs/dev/pts \
++		rootfs/proc rootfs/sys rootfs/tmp rootfs/var/run rootfs/run
++	cp $&lt; $@
++	chmod +x $@
+ 
+-$(CURL_SRC)/configure: | $(BUILD)
+-	curl -fsSL "$(CURLURL)" | tar xz -C $(BUILD)
++# --- sources under build/ ---------------------------------------------------
+ 
+-# --- installed artifacts in rootfs/ (what Make actually tracks) -------------
++define fetch_tar
++build/$(1):
++	mkdir -p build
++	curl -fsSL "$(2)" | tar xz -C build
++endef
++$(eval $(call fetch_tar,musl-$(MUSLVER)/configure,$(MUSLURL)))
++$(eval $(call fetch_tar,make-$(MAKEVER)/configure,$(MAKEURL)))
++$(eval $(call fetch_tar,mksh/Build.sh,$(MKSHURL)))
++$(eval $(call fetch_tar,wolfssl-$(WOLFSSLVER)/configure,$(WOLFSSLURL)))
++$(eval $(call fetch_tar,tiny-curl-$(CURLVER)/configure,$(CURLURL)))
++$(eval $(call fetch_tar,bearssl-$(BEARSSLVER)/Makefile,$(BEARSSLURL)))
++
++build/linux-$(LINUXVER).tar.xz:
++	mkdir -p build
++	curl -fsSL -o $@ "$(LINUXURL)"
+ 
+-MUSL_GCC   := $(ROOTFS)/bin/musl-gcc
+-LINUX_HDR  := $(ROOTFS)/include/linux/version.h
+-TOYBOX_BIN := $(ROOTFS)/bin/toybox
+-HOST_MAKE  := $(ROOTFS)/bin/make
+-HOST_SH    := $(ROOTFS)/bin/sh
+-HOST_CC    := $(ROOTFS)/bin/cc
+-ROOT_INIT  := $(ROOTFS)/bin/init
+-WOLFSSL_A  := $(ROOTFS)/lib/libwolfssl.a
+-CURL_SO    := $(ROOTFS)/lib/libcurl.so
+-REGDB      := $(ROOTFS)/lib/firmware/regulatory.db
++build/linux-$(LINUXVER)/Makefile: build/linux-$(LINUXVER).tar.xz
++	tar xf $&lt; -C build
+ 
+-$(REGDB):
++define fetch_git
++build/$(1)/.git:
++	mkdir -p build
++	git clone $(2) $(3) build/$(1)
++endef
++$(eval $(call fetch_git,toybox,,$(TOYBOXURL)))
++$(eval $(call fetch_git,libtls-bearssl,--depth=1,$(LIBTLS_BEARSSL_URL)))
++
++build/tinycc/.git:
++	rm -rf build/tinycc
++	mkdir -p build
++	git clone "$(TCCURL)" build/tinycc
++
++$(ROOTFS_LIBBEARSSL): build/bearssl-$(BEARSSLVER)/Makefile rootfs/bin/musl-gcc
++	@echo "==&gt; bearssl ($(BEARSSLVER))"
++	mkdir -p rootfs/lib $(TLS_INCLUDE)
++	$(MAKE) -C build/bearssl-$(BEARSSLVER) CC=$(PLAT_CC) \
++		CFLAGS="-std=c99 -Wall $(TLS_CFLAGS) -I src -I inc" build/libbearssl.a
++	rm -rf $@.tmp &amp;&amp; mkdir $@.tmp &amp;&amp; (cd $@.tmp &amp;&amp; ar x $(CURDIR)/build/bearssl-$(BEARSSLVER)/build/libbearssl.a)
++	$(PLAT_CC) -shared -Wl,-soname,libbearssl.so.0 -o $@ $@.tmp/*.o -Wl,--gc-sections
++	rm -rf $@.tmp &amp;&amp; $(TOYBOX_STRIP) $@
++	ln -sfn libbearssl.so.$(BEARSSLVER) rootfs/lib/libbearssl.so.0
++	ln -sfn libbearssl.so.0 rootfs/lib/libbearssl.so
++	cp -f build/bearssl-$(BEARSSLVER)/inc/*.h $(TLS_INCLUDE)/
++
++$(ROOTFS_LIBTLS): build/libtls-bearssl/.git $(ROOTFS_LIBBEARSSL)
++	@echo "==&gt; libtls-bearssl"
++	$(MAKE) -C build/libtls-bearssl clean &gt;/dev/null 2&gt;&amp;1 || true
++	rm -f build/libtls-bearssl/config.mk build/libtls-bearssl/*.o \
++		build/libtls-bearssl/compat/*.o build/libtls-bearssl/libtls.a
++	printf '%s\n' 'CC=$(PLAT_CC)' \
++		'CFLAGS=-Wall $(TLS_CFLAGS) -I. -I$(TLS_INCLUDE) -D_GNU_SOURCE -DLIBRESSL_INTERNAL' \
++		'LDFLAGS=-L$(CURDIR)/rootfs/lib' 'LDLIBS=-lbearssl' \
++		&gt; build/libtls-bearssl/config.mk
++	$(MAKE) -C build/libtls-bearssl libtls.a
++	mkdir -p rootfs/lib $(TLS_INCLUDE)
++	rm -rf $@.tmp &amp;&amp; mkdir $@.tmp &amp;&amp; (cd $@.tmp &amp;&amp; ar x $(CURDIR)/build/libtls-bearssl/libtls.a)
++	$(PLAT_CC) -shared -Wl,-soname,libtls.so.$(LIBTLS_BEARSSL_MAJOR) -o $@ \
++		$@.tmp/*.o -L$(CURDIR)/rootfs/lib -lbearssl -lpthread -Wl,--gc-sections
++	rm -rf $@.tmp &amp;&amp; $(TOYBOX_STRIP) $@
++	ln -sfn libtls.so.$(LIBTLS_BEARSSL_MAJOR) rootfs/lib/libtls.so
++	cp -f build/libtls-bearssl/tls.h $(TLS_INCLUDE)/
++	strings $@ | grep -q '/etc/ssl/cert.pem'
++
++rootfs/lib/firmware/regulatory.db:
+ 	mkdir -p $(dir $@)
+ 	curl -fsSL -o $@ "$(REGDBURL)/regulatory.db"
+ 	curl -fsSL -o $@.p7s "$(REGDBURL)/regulatory.db.p7s"
+ 
+-LINUX_CFG  = $(CONFIGS)/$(1)-linux.config
+-TOYBOX_CFG = $(CONFIGS)/$(1)-toybox.config
+-POST_SH    = $(SCRIPTS)/post-install-$(1).sh
+-LINUX_OK   = $(BUILD)/$(1)/linux.ok
+-POST_OK    = $(BUILD)/$(1)/post.ok
++# --- toolchain pieces in rootfs/ --------------------------------------------
+ 
+-# musl -&gt; rootfs (shared)
+-$(MUSL_GCC): $(MUSL_SRC)/configure
++rootfs/lib/libc.so rootfs/bin/musl-gcc: build/musl-$(MUSLVER)/configure
+ 	@echo "==&gt; musl"
+-	mkdir -p $(ROOTFS)
+-	cd $(MUSL_SRC) &amp;&amp; ./configure --prefix=$(ROOTFS) --enable-static
+-	$(MAKE) -C $(MUSL_SRC)
+-	$(MAKE) -C $(MUSL_SRC) install
+-
+-# Per-platform kernel/headers install; $(BUILD)/&lt;plat&gt;/linux.ok records done+config used
+-# Kernel arch: Pi Zero is 32-bit arm; everything else in-tree is arm64/x86_64 host configs
+-LINUX_ARCH_rpizero := arm
+-LINUX_ARCH_DEFAULT :=
+-
+-define LINUX_RULE
+-$$(call LINUX_OK,$(1)): $$(call LINUX_CFG,$(1)) $$(LINUX_SRC)/Makefile $$(MUSL_GCC)
+-	@echo "==&gt; linux ($(1))"
+-	@mkdir -p $$(dir $$@)
+-	cp $$(call LINUX_CFG,$(1)) $$(LINUX_SRC)/.config
+-	@KARCH="$$(LINUX_ARCH_$(1))"; \
+-	if [ "$(1)" = "rpizero" ]; then KARCH=arm; fi; \
+-	if [ -n "$$KARCH" ]; then \
+-		CC=$$(MUSL_GCC) ARCH=$$KARCH $$(MAKE) -C $$(LINUX_SRC) olddefconfig; \
+-		CC=$$(MUSL_GCC) ARCH=$$KARCH $$(MAKE) -C $$(LINUX_SRC); \
+-		CC=$$(MUSL_GCC) ARCH=$$KARCH INSTALL_HDR_PATH=$$(ROOTFS) INSTALL_PATH=$$(ROOTFS)/boot \
+-			INSTALL_MOD_PATH=$$(ROOTFS) $$(MAKE) -C $$(LINUX_SRC) zImage dtbs modules; \
+-		CC=$$(MUSL_GCC) ARCH=$$KARCH INSTALL_HDR_PATH=$$(ROOTFS) INSTALL_PATH=$$(ROOTFS)/boot \
+-			INSTALL_MOD_PATH=$$(ROOTFS) $$(MAKE) -C $$(LINUX_SRC) headers_install modules_install; \
+-		mkdir -p $$(ROOTFS)/boot; \
+-		cp -f $$(LINUX_SRC)/arch/arm/boot/zImage $$(ROOTFS)/boot/kernel.img 2&gt;/dev/null || true; \
+-		cp -f $$(LINUX_SRC)/arch/arm/boot/dts/broadcom/bcm2835-rpi-zero*.dtb $$(ROOTFS)/boot/ 2&gt;/dev/null || \
+-			cp -f $$(LINUX_SRC)/arch/arm/boot/dts/bcm2835-rpi-zero*.dtb $$(ROOTFS)/boot/ 2&gt;/dev/null || true; \
+-	else \
+-		CC=$$(MUSL_GCC) $$(MAKE) -C $$(LINUX_SRC); \
+-		CC=$$(MUSL_GCC) INSTALL_HDR_PATH=$$(ROOTFS) INSTALL_PATH=$$(ROOTFS)/boot \
+-			INSTALL_MOD_PATH=$$(ROOTFS) $$(MAKE) -C $$(LINUX_SRC) install headers_install modules_install; \
+-	fi
+-	@touch $$(LINUX_HDR) $$@
+-endef
+-$(foreach p,$(STD_PLATS),$(eval $(call LINUX_RULE,$(p))))
+-
+-# toybox: depends on active platform linux.ok (set via recursive make PLATFORM=)
+-$(TOYBOX_BIN): $(call LINUX_OK,$(PLATFORM)) $(TOYBOX_SRC)/.git $(call TOYBOX_CFG,$(PLATFORM)) $(MUSL_GCC)
++	mkdir -p rootfs
++	cd build/musl-$(MUSLVER) &amp;&amp; ./configure --prefix=$(CURDIR)/rootfs --enable-static
++	$(MAKE) -C build/musl-$(MUSLVER)
++	$(MAKE) -C build/musl-$(MUSLVER) install
++
++$(ROOTFS_MUSL_LD) rootfs/bin/ldd rootfs/bin/ld: rootfs/lib/libc.so
++	mkdir -p rootfs/bin rootfs/lib
++	ln -sfn libc.so $(ROOTFS_MUSL_LD)
++	ln -sfn libc.so rootfs/lib/ld-linux-$(MUSL_ARCH).so.1
++	ln -sf ../lib/libc.so rootfs/bin/ldd
++	ln -sf ../lib/libc.so rootfs/bin/ld
++
++# headers + boot image are real outputs of the platform kernel build
++LINUX_HEADERS = rootfs/include/linux/version.h
++BOOT_IMAGE = rootfs/boot/vmlinuz
++BOOT_IMAGE_rpizero = rootfs/boot/kernel.img
++BOOT_IMAGE_radxacm5io = rootfs/boot/Image
++boot_image = $(or $(BOOT_IMAGE_$(PLATFORM)),$(BOOT_IMAGE))
++
++rootfs/bin/toybox: configs/$(PLATFORM)-toybox.config build/toybox/.git \
++		rootfs/bin/musl-gcc $(ROOTFS_MUSL_LD) $(LINUX_HEADERS) $(boot_image) \
++		$(ROOTFS_TLS_LIBS)
+ 	@echo "==&gt; toybox ($(PLATFORM))"
+-	cp $(call TOYBOX_CFG,$(PLATFORM)) $(TOYBOX_SRC)/.config
+-	CC=$(MUSL_GCC) $(MAKE) -C $(TOYBOX_SRC) LDFLAGS='-static --no-pie' toybox
+-	$(MAKE) -C $(TOYBOX_SRC) PREFIX=$(ROOTFS)/bin install_flat
++	-$(MAKE) -C build/toybox distclean
++	cd build/toybox &amp;&amp; KCONFIG_ALLCONFIG=$(CURDIR)/configs/$(PLATFORM)-toybox.config \
++		$(MAKE) allnoconfig
++	CC=$(PLAT_CC) STRIP="$(TOYBOX_STRIP)" \
++		$(MAKE) -C build/toybox CFLAGS="$(TOYBOX_CFLAGS)" LDFLAGS="$(TOYBOX_LDFLAGS)" toybox
++	$(MAKE) -C build/toybox PREFIX=$(CURDIR)/rootfs/bin install_flat
++	@if command -v readelf &gt;/dev/null; then \
++		! readelf -S $@ | grep -q '\.symtab' || { echo "toybox not stripped" &gt;&amp;2; exit 1; }; \
++		readelf -d $@ | grep -q 'libtls\.so' || { echo "toybox missing NEEDED libtls" &gt;&amp;2; exit 1; }; \
++		readelf -d $@ | grep -q '\[libc\.so\]' || { echo "toybox missing NEEDED libc.so" &gt;&amp;2; exit 1; }; \
++	fi
++	@! strings $@ | grep -q GLIBC_ || { echo "toybox linked against glibc" &gt;&amp;2; exit 1; }
++	@ls -lh $@ $(ROOTFS_TLS_LIBS)
+ 
+-$(HOST_MAKE): $(MUSL_GCC) $(MAKE_SRC)/configure
++rootfs/bin/make: rootfs/bin/musl-gcc build/make-$(MAKEVER)/configure
+ 	@echo "==&gt; make"
+-	CC=$(MUSL_GCC) &amp;&amp; cd $(MAKE_SRC) &amp;&amp; ./configure --prefix=$(ROOTFS) \
++	cd build/make-$(MAKEVER) &amp;&amp; CC=$(PLAT_CC) ./configure --prefix=$(CURDIR)/rootfs \
+ 		--host=x86_64-linux-gnu --target=x86_64-linux-musl
+-	$(MAKE) -C $(MAKE_SRC)
+-	$(MAKE) -C $(MAKE_SRC) install
++	$(MAKE) -C build/make-$(MAKEVER)
++	$(MAKE) -C build/make-$(MAKEVER) install
+ 
+-$(HOST_SH): $(MUSL_GCC) $(MKSH_SRC)/Build.sh
++rootfs/bin/sh: rootfs/bin/musl-gcc build/mksh/Build.sh
+ 	@echo "==&gt; mksh"
+-	CC="$(MUSL_GCC) -static --no-pie" &amp;&amp; cd $(MKSH_SRC) &amp;&amp; chmod +x Build.sh &amp;&amp; ./Build.sh
+-	install -c -s -m 555 $(MKSH_SRC)/mksh $(HOST_SH)
+-	mkdir -p $(ROOTFS)/share/man/man1
+-	-install -c -m 444 $(MKSH_SRC)/mksh.1 $(ROOTFS)/share/man/man1/
++	cd build/mksh &amp;&amp; chmod +x Build.sh &amp;&amp; CC="$(PLAT_CC) -static --no-pie" ./Build.sh
++	install -c -s -m 555 build/mksh/mksh $@
++	mkdir -p rootfs/share/man/man1
++	-install -c -m 444 build/mksh/mksh.1 rootfs/share/man/man1/
++
++rootfs/bin/ar:
++	mkdir -p $(dir $@)
++	printf '%s\n' '#!/bin/sh' 'cc -ar $$@' &gt; $@
++	chmod +x $@
+ 
+-# tcc pass1+2 -&gt; final $(HOST_CC); also needs headers from linux step
+-$(HOST_CC): $(HOST_MAKE) $(HOST_SH) $(call LINUX_OK,$(PLATFORM)) $(TCC_SRC)/.git
++rootfs/bin/cc: rootfs/bin/make rootfs/bin/sh build/tinycc/.git \
++		$(LINUX_HEADERS) $(boot_image) rootfs/lib/libc.so
+ 	@echo "==&gt; tcc pass1"
+-	rm -f $(ROOTFS)/lib/musl-gcc.specs $(MUSL_GCC)
+-	cd $(TCC_SRC) &amp;&amp; ./configure --prefix=/ \
+-		--sysincludepaths=$(ROOTFS)/include --libpaths=$(ROOTFS)/lib \
+-		--tccdir=/lib --crtprefix=$(ROOTFS)/lib --elfinterp=$(ROOTFS)/lib/libc.so \
++	rm -f rootfs/lib/musl-gcc.specs rootfs/bin/musl-gcc
++	cd build/tinycc &amp;&amp; ./configure --prefix=/ \
++		--sysincludepaths=$(CURDIR)/rootfs/include --libpaths=$(CURDIR)/rootfs/lib \
++		--tccdir=/lib --crtprefix=$(CURDIR)/rootfs/lib --elfinterp=$(CURDIR)/rootfs/lib/libc.so \
+ 		--config-static --config-bcheck=no --disable-rpath --config-musl
+-	CC="$(MUSL_GCC) -static --no-pie" $(MAKE) -C $(TCC_SRC)
+-	$(MAKE) -C $(TCC_SRC) DESTDIR=$(ROOTFS) install
+-	printf '%s\n' '#!/bin/sh' 'tcc -ar $$@' &gt; $(ROOTFS)/bin/ar &amp;&amp; chmod +x $(ROOTFS)/bin/ar
++	CC="$(PLAT_CC) -static --no-pie" $(MAKE) -C build/tinycc
++	$(MAKE) -C build/tinycc DESTDIR=$(CURDIR)/rootfs install
++	printf '%s\n' '#!/bin/sh' 'tcc -ar $$@' &gt; rootfs/bin/ar &amp;&amp; chmod +x rootfs/bin/ar
+ 	@echo "==&gt; tcc pass2"
+-	rm -rf $(TCC_SRC) &amp;&amp; git clone "$(TCCURL)" $(TCC_SRC)
+-	cd $(TCC_SRC) &amp;&amp; ./configure --prefix=/ \
+-		--sysincludepaths=$(ROOTFS)/include:/include --libpaths=$(ROOTFS)/lib:/lib \
+-		--crtprefix=/lib --ar="$(ROOTFS)/bin/tcc -ar" --elfinterp=/lib/libc.so \
++	rm -rf build/tinycc &amp;&amp; git clone "$(TCCURL)" build/tinycc
++	cd build/tinycc &amp;&amp; ./configure --prefix=/ \
++		--sysincludepaths=$(CURDIR)/rootfs/include:/include --libpaths=$(CURDIR)/rootfs/lib:/lib \
++		--crtprefix=/lib --ar="$(CURDIR)/rootfs/bin/tcc -ar" --elfinterp=/lib/libc.so \
+ 		--config-static --config-bcheck=no --disable-rpath --config-musl
+-	CC="$(ROOTFS)/bin/tcc -static" $(MAKE) -C $(TCC_SRC)
+-	$(MAKE) -C $(TCC_SRC) DESTDIR=$(ROOTFS) install
+-	mv $(ROOTFS)/bin/tcc $(HOST_CC)
+-	printf '%s\n' '#!/bin/sh' 'cc -ar $$@' &gt; $(ROOTFS)/bin/ar &amp;&amp; chmod +x $(ROOTFS)/bin/ar
+-
+-# skeleton + chroot target-tcc
+-$(ROOT_INIT): $(HOST_CC) $(TOYBOX_BIN) $(REPO_ROOT)/init $(SCRIPTS)/make-target.sh
+-	@echo "==&gt; skeleton + chroot tcc"
+-	mkdir -p $(ROOTFS)/bin $(ROOTFS)/etc $(ROOTFS)/home/root $(ROOTFS)/dev/pts \
+-		$(ROOTFS)/proc $(ROOTFS)/sys $(ROOTFS)/tmp $(ROOTFS)/var/run $(ROOTFS)/run
+-	cp -a $(REPO_ROOT)/etc/. $(ROOTFS)/etc/
+-	cp $(REPO_ROOT)/init $(ROOTFS)/bin/init
+-	mkdir -p $(ROOTFS)/tmp
+-	cp $(SCRIPTS)/make-target.sh $(ROOTFS)/tmp/make-target.sh
+-	test -d $(TCC_SRC)/.git || git clone "$(TCCURL)" $(TCC_SRC)
+-	rm -rf $(ROOTFS)/tmp/tinycc &amp;&amp; cp -a $(TCC_SRC) $(ROOTFS)/tmp/tinycc
+-	sudo mount -v --bind /dev $(ROOTFS)/dev
+-	sudo mount -vt devpts devpts -o gid=5,mode=0620 $(ROOTFS)/dev/pts
+-	sudo mount -vt proc proc $(ROOTFS)/proc
+-	sudo mount -vt sysfs sysfs $(ROOTFS)/sys
+-	sudo chroot $(ROOTFS) /bin/env -i HOME=/home/root PATH=/bin /tmp/make-target.sh \
+-		|| ( sudo $(SCRIPTS)/umounts.sh 2&gt;/dev/null; exit 1 )
+-	sudo $(SCRIPTS)/umounts.sh 2&gt;/dev/null || true
+-
+-$(WOLFSSL_A): $(HOST_CC) $(WOLFSSL_SRC)/configure
++	CC="$(CURDIR)/rootfs/bin/tcc -static" $(MAKE) -C build/tinycc
++	$(MAKE) -C build/tinycc DESTDIR=$(CURDIR)/rootfs install
++	mv rootfs/bin/tcc $@
++	printf '%s\n' '#!/bin/sh' 'cc -ar $$@' &gt; rootfs/bin/ar &amp;&amp; chmod +x rootfs/bin/ar
++
++rootfs/lib/libwolfssl.a: rootfs/bin/cc build/wolfssl-$(WOLFSSLVER)/configure
+ 	@echo "==&gt; wolfssl"
+-	cd $(WOLFSSL_SRC) &amp;&amp; ./configure --prefix=$(ROOTFS) \
++	cd build/wolfssl-$(WOLFSSLVER) &amp;&amp; ./configure --prefix=$(CURDIR)/rootfs \
+ 		--host=x86_64-linux-gnu --target=x86_64-linux-musl --enable-opensslextra
+-	$(MAKE) -C $(WOLFSSL_SRC) &amp;&amp; $(MAKE) -C $(WOLFSSL_SRC) install
++	$(MAKE) -C build/wolfssl-$(WOLFSSLVER) &amp;&amp; $(MAKE) -C build/wolfssl-$(WOLFSSLVER) install
+ 
+-$(CURL_SO): $(WOLFSSL_A) $(CURL_SRC)/configure
++rootfs/lib/libcurl.so: rootfs/lib/libwolfssl.a build/tiny-curl-$(CURLVER)/configure
+ 	@echo "==&gt; tinycurl"
+-	cd $(CURL_SRC) &amp;&amp; ./configure --prefix=$(ROOTFS) \
++	cd build/tiny-curl-$(CURLVER) &amp;&amp; ./configure --prefix=$(CURDIR)/rootfs \
+ 		--host=x86_64-linux-gnu --target=x86_64-linux-musl \
+ 		--with-wolfssl --disable-libcurl-option --disable-static
+-	$(MAKE) -C $(CURL_SRC) &amp;&amp; $(MAKE) -C $(CURL_SRC) install
++	$(MAKE) -C build/tiny-curl-$(CURLVER) &amp;&amp; $(MAKE) -C build/tiny-curl-$(CURLVER) install
++
++# --- kernel: one recipe family per PLATFORM (single writer for version.h) ---
++
++LIN0_LINUX_PATCHES := $(sort $(wildcard patches/linux-radxacm5io-*.patch))
++
++build/linux-src/Makefile:
++	mkdir -p build
++	git clone --depth=1 https://github.com/torvalds/linux.git build/linux-src
++
++# Apply lin0 DTS/driver patches once per source tree checkout.
++build/linux-src/.lin0-patched: build/linux-src/Makefile $(LIN0_LINUX_PATCHES)
++	for p in $(LIN0_LINUX_PATCHES); do \
++		patch -d build/linux-src -p1 -N &lt; "$$p" || \
++		patch -d build/linux-src -p1 -R -s --dry-run &lt; "$$p"; \
++	done
++	grep -q 'hym8563: rtc@51' \
++		build/linux-src/arch/arm64/boot/dts/rockchip/rk3588s-radxa-cm5-io.dts
++	touch $@
++
++configs/radxacm5io-linux.config: configs/radxacm5io-kernel.fragment build/linux-src/.lin0-patched
++	sh scripts/gen-radxacm5io-linux-config.sh build/linux-src
++
++ifeq ($(PLATFORM),radxacm5io)
++rootfs/boot/Image rootfs/boot/$(RADXA_DTB) $(LINUX_HEADERS): configs/radxacm5io-linux.config \
++		rootfs/bin/musl-gcc build/linux-src/.lin0-patched
++	@echo "==&gt; linux (radxacm5io)"
++	mkdir -p build/dtbs build/kheaders build/kheaders-staging \
++		rootfs/boot rootfs/usr/include rootfs/include/linux
++	cd build/linux-src &amp;&amp; cp $(CURDIR)/configs/radxacm5io-linux.config .config
++	$(MAKE) -C build/linux-src ARCH=arm64 olddefconfig
++	$(MAKE) -C build/linux-src ARCH=arm64 -j$$(nproc) Image modules dtbs
++	INSTALL_MOD_PATH=$(CURDIR)/rootfs $(MAKE) -C build/linux-src ARCH=arm64 modules_install
++	cp -f build/linux-src/arch/arm64/boot/Image rootfs/boot/Image
++	cp -f build/linux-src/arch/arm64/boot/dts/rockchip/$(RADXA_DTB) rootfs/boot/$(RADXA_DTB)
++	cp -f build/linux-src/arch/arm64/boot/dts/rockchip/$(RADXA_DTB) build/dtbs/
++	$(MAKE) -C build/linux-src ARCH=arm64 headers_install
++	cp -f build/linux-src/usr/include/linux/version.h rootfs/include/linux/version.h
++	cd build/linux-src/usr/include &amp;&amp; tar cf - . | tar xf - -C $(CURDIR)/rootfs/usr/include
++	rm -rf build/kheaders &amp;&amp; mkdir -p build/kheaders
++	cd build/linux-src/usr/include &amp;&amp; tar cf - . | tar xf - -C $(CURDIR)/build/kheaders
++	strings rootfs/boot/$(RADXA_DTB) | grep -q haoyu,hym8563
++
++else ifeq ($(PLATFORM),rpizero)
++rootfs/boot/kernel.img $(LINUX_HEADERS): configs/rpizero-linux.config \
++		rootfs/bin/musl-gcc build/linux-$(LINUXVER)/Makefile
++	@echo "==&gt; linux (rpizero)"
++	mkdir -p rootfs/boot
++	cp configs/rpizero-linux.config build/linux-$(LINUXVER)/.config
++	CC=$(CURDIR)/rootfs/bin/musl-gcc ARCH=arm $(MAKE) -C build/linux-$(LINUXVER) olddefconfig
++	CC=$(CURDIR)/rootfs/bin/musl-gcc ARCH=arm $(MAKE) -C build/linux-$(LINUXVER)
++	CC=$(CURDIR)/rootfs/bin/musl-gcc ARCH=arm INSTALL_HDR_PATH=$(CURDIR)/rootfs \
++		INSTALL_PATH=$(CURDIR)/rootfs/boot INSTALL_MOD_PATH=$(CURDIR)/rootfs \
++		$(MAKE) -C build/linux-$(LINUXVER) zImage dtbs modules headers_install modules_install
++	cp -f build/linux-$(LINUXVER)/arch/arm/boot/zImage rootfs/boot/kernel.img
++	-cp -f build/linux-$(LINUXVER)/arch/arm/boot/dts/broadcom/bcm2835-rpi-zero*.dtb rootfs/boot/
++	-cp -f build/linux-$(LINUXVER)/arch/arm/boot/dts/bcm2835-rpi-zero*.dtb rootfs/boot/
++
++else
++rootfs/boot/vmlinuz $(LINUX_HEADERS): configs/$(PLATFORM)-linux.config \
++		rootfs/bin/musl-gcc build/linux-$(LINUXVER)/Makefile
++	@echo "==&gt; linux ($(PLATFORM))"
++	cp configs/$(PLATFORM)-linux.config build/linux-$(LINUXVER)/.config
++	CC=$(CURDIR)/rootfs/bin/musl-gcc $(MAKE) -C build/linux-$(LINUXVER) olddefconfig
++	CC=$(CURDIR)/rootfs/bin/musl-gcc $(MAKE) -C build/linux-$(LINUXVER)
++	CC=$(CURDIR)/rootfs/bin/musl-gcc INSTALL_HDR_PATH=$(CURDIR)/rootfs INSTALL_PATH=$(CURDIR)/rootfs/boot \
++		INSTALL_MOD_PATH=$(CURDIR)/rootfs \
++		$(MAKE) -C build/linux-$(LINUXVER) install headers_install modules_install
++endif
+ 
+-# platform post-install (optional); marker under build/&lt;plat&gt;/
+-define POST_RULE
+-$$(call POST_OK,$(1)): $$(call LINUX_OK,$(1)) $$(ROOT_INIT) $$(WOLFSSL_A) $$(CURL_SO)
++# --- skeleton / post-install ------------------------------------------------
++
++.PHONY: skeleton
++skeleton: rootfs/bin/init $(init_deps)
++
++.PHONY: skeleton-chroot
++skeleton-chroot: skeleton build/tinycc/.git scripts/make-target.sh
++	@echo "==&gt; chroot tcc pass3"
++	cp scripts/make-target.sh rootfs/tmp/make-target.sh
++	rm -rf rootfs/tmp/tinycc &amp;&amp; cp -a build/tinycc rootfs/tmp/tinycc
++	sudo mount -v --bind /dev rootfs/dev
++	sudo mount -vt devpts devpts -o gid=5,mode=0620 rootfs/dev/pts
++	sudo mount -vt proc proc rootfs/proc
++	sudo mount -vt sysfs sysfs rootfs/sys
++	sudo chroot rootfs /bin/env -i HOME=/home/root PATH=/bin /tmp/make-target.sh \
++		|| { sudo scripts/umounts.sh; exit 1; }
++	sudo scripts/umounts.sh
++
++# Platforms that run the in-rootfs tcc pass use skeleton-chroot; others use skeleton.
++SKELETON_radxacm5io = skeleton
++SKELETON_ = skeleton-chroot
++skeleton_for = $(or $(SKELETON_$(1)),$(SKELETON_))
++
++define POST_INSTALL_RULE
++.PHONY: post-install-$(1)
++post-install-$(1): $$(call skeleton_for,$(1)) $$(call post_extra,$(1))
+ 	@echo "==&gt; post-install ($(1))"
+-	@mkdir -p $$(dir $$@)
+-	@if [ -f "$$(call POST_SH,$(1))" ]; then \
+-		cd $$(BUILD) &amp;&amp; export outdir=$$(ROOTFS) PLATFORM=$(1) linuxver=$$(LINUXVER) \
+-			linux_src=$$(LINUX_SRC) &amp;&amp; \
+-			. $$(call POST_SH,$(1)); \
+-	fi
+-	@sudo $$(SCRIPTS)/umounts.sh 2&gt;/dev/null || true
+-	@touch $$@
++	$(if $(wildcard scripts/post-install-$(1).sh),cd build &amp;&amp; export outdir=$(CURDIR)/rootfs PLATFORM=$(1) linuxver=$(LINUXVER) linux_src=$(CURDIR)/build/linux-$(LINUXVER) &amp;&amp; . $(CURDIR)/scripts/post-install-$(1).sh)
++	$(if $(POST_TARGET_$(1)),$$(MAKE) $(POST_TARGET_$(1)))
++	-command -v sudo &gt;/dev/null &amp;&amp; sudo scripts/umounts.sh &gt;/dev/null || true
+ endef
+-$(foreach p,$(STD_PLATS),$(eval $(call POST_RULE,$(p))))
++$(foreach p,$(PLATFORMS),$(eval $(call POST_INSTALL_RULE,$(p))))
++
++# --- platform tarballs ------------------------------------------------------
++
++# Cached arm64 Debian image for macOS builds (no separate Dockerfile).
++RADXA_BUILDER_PKGS := build-essential gcc g++ make bison flex bc kmod cpio rsync \
++	gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
++	libncurses-dev libelf-dev dwarves \
++	git curl ca-certificates xz-utils bzip2 \
++	python3 python3-dev python3-setuptools python3-pyelftools \
++	device-tree-compiler u-boot-tools swig libgnutls28-dev \
++	dosfstools e2fsprogs fdisk util-linux parted gdisk musl-tools xxd
+ 
+-# --- platform entry: phony name -&gt; tarball ----------------------------------
++ifneq ($(HOST_OS),Linux)
++define run_platform_radxacm5io
++	@$(MAKE) radxacm5io-builder
++	docker run --rm --platform linux/arm64 \
++		-e RADXA_LINUXVER="$(RADXA_LINUXVER)" \
++		-v "$(CURDIR):/work" -w /work \
++		"$(RADXA_BUILDER)" \
++		make PLATFORM=radxacm5io RADXA_LINUXVER="$(RADXA_LINUXVER)" post-install-radxacm5io
++endef
++endif
+ 
+ define PLAT_RULE
+ .PHONY: $(1)
+ $(1): rootfs-$(1).tar.xz
+ 
+-# Tarball is newer only when post-install (and thus whole chain) is current
+-rootfs-$(1).tar.xz: $$(call POST_OK,$(1)) $$(call LINUX_CFG,$(1)) $$(call TOYBOX_CFG,$(1))
++rootfs-$(1).tar.xz: force-platform-$(1) configs/$(1)-linux.config configs/$(1)-toybox.config \
++		rootfs/bin/init $(ROOTFS_ETC)
+ 	@echo "==&gt; tar rootfs-$(1).tar.xz"
+-	cd $$(ROOTFS) &amp;&amp; tar cfJ $$(REPO_ROOT)/rootfs-$(1).tar.xz .
++	cd rootfs &amp;&amp; tar cfJ $(CURDIR)/rootfs-$(1).tar.xz .
+ 	@echo "Build complete: rootfs-$(1).tar.xz"
+-endef
+-$(foreach p,$(STD_PLATS),$(eval $(call PLAT_RULE,$(p))))
+-
+-# Build each platform with PLATFORM= set so shared targets pick the right configs
+-define PLAT_RECURSE
+-rootfs-$(1).tar.xz: force-platform-$(1)
+ 
+ .PHONY: force-platform-$(1)
+ force-platform-$(1):
+-	@$$(MAKE) PLATFORM=$(1) $$(call POST_OK,$(1))
++	$(if $(run_platform_$(1)),$(run_platform_$(1)),@$(MAKE) PLATFORM=$(1) post-install-$(1))
+ endef
+-$(foreach p,$(STD_PLATS),$(eval $(call PLAT_RECURSE,$(p))))
++$(foreach p,$(filter-out radxacm5io,$(PLATFORMS)),$(eval $(call PLAT_RULE,$(p))))
+ 
+-# --- aliases ----------------------------------------------------------------
++# --- radxa boot files + image -----------------------------------------------
+ 
+-.PHONY: arm64 radxa radxa-cm5 radxa-cm5-io cm5io cm5-io
+-.PHONY: rpi-zero rpi-zero-w rpizero-w rpi0 rpi0w zerow rpizero-img
++RTL_FW_SRC := $(wildcard linux-firmware/rtlwifi/rtl8188eufw.bin)
++RTL_FW_DST := $(patsubst linux-firmware/%,rootfs/lib/firmware/%,$(RTL_FW_SRC))
+ 
+-arm64: aarch64
+-radxa radxa-cm5 radxa-cm5-io cm5io cm5-io: radxacm5io
+-rpi-zero rpi-zero-w rpizero-w rpi0 rpi0w zerow: rpizero
+-
+-rpizero-img: rootfs-rpizero.tar.xz
+-	$(SCRIPTS)/mkimg-rpizero.sh
+-
+-# =============================================================================
+-# Radxa CM5 + IO — all logic in this Makefile (Docker only when host needs it)
+-# =============================================================================
+-#   make radxacm5io              # rootfs+kernel + hybrid image
+-#   make radxacm5io-rootfs       # kernel/userspace only (Linux, or inside Docker)
+-#   make radxacm5io-img          # pack lin0-radxacm5io.img from existing rootfs
+-#
+-# Env: RADXA_LINUXVER (default master), RADXA_P3_MB (default 128), OFFICIAL_IMG
+-# =============================================================================
+-
+-HOST_OS          := $(shell uname -s)
+-RADXA_LINUXVER   ?= master
+-RADXA_P3_MB      ?= 128
+-RADXA_P3_LBA     := 679936
+-RADXA_DTB        := rk3588s-radxa-cm5-io.dtb
+-RADXA_IMG        := $(REPO_ROOT)/lin0-radxacm5io.img
+-RADXA_OFFICIAL   ?= $(BUILD)/official-radxa-inspect/radxa-cm5-io_bookworm_cli_b3.output.img
+-RADXA_BUILDER    := lin0-radxacm5io-builder:latest
+-RADXA_ROOT_LABEL := lin0root
+-RADXA_ROOT_UUID  := a1ce5ba1-b0fe-43c3-b85c-eca170319b83
+-RADXA_CMN        := console=tty0 rootwait rw init=/bin/init
+-
+-.PHONY: radxacm5io radxacm5io-builder radxacm5io-rootfs radxacm5io-img radxacm5io-bootfiles
+-
+-radxacm5io: ## full Radxa hybrid image
+-	@echo "lin0 radxacm5io  host=$(HOST_OS)  linux=$(RADXA_LINUXVER)  -&gt; $(RADXA_IMG)"
+-	@test -f "$(RADXA_OFFICIAL)" || { echo "missing official donor: $(RADXA_OFFICIAL)" &gt;&amp;2; exit 1; }
+-ifneq ($(HOST_OS),Linux)
+-	@$(MAKE) radxacm5io-builder
+-	docker run --rm --platform linux/arm64 \
+-		-e RADXA_LINUXVER="$(RADXA_LINUXVER)" \
+-		-v "$(REPO_ROOT):/work" -w /work \
+-		"$(RADXA_BUILDER)" \
+-		make radxacm5io-rootfs RADXA_LINUXVER="$(RADXA_LINUXVER)"
+-else
+-	@$(MAKE) radxacm5io-rootfs RADXA_LINUXVER="$(RADXA_LINUXVER)"
++ifneq ($(RTL_FW_SRC),)
++rootfs/lib/firmware/rtlwifi/rtl8188eufw.bin: linux-firmware/rtlwifi/rtl8188eufw.bin
++	mkdir -p $(dir $@)
++	cp -f $&lt; $@
+ endif
+-	@$(MAKE) radxacm5io-img
+ 
+-radxacm5io-builder:
+-	@docker info &gt;/dev/null 2&gt;&amp;1 || { echo "start Docker first" &gt;&amp;2; exit 1; }
+-	@echo "==&gt; docker builder $(RADXA_BUILDER)"
+-	@mkdir -p "$(BUILD)"
+-	@printf '%s\n' \
+-		'FROM debian:bookworm-slim' \
+-		'ENV DEBIAN_FRONTEND=noninteractive' \
+-		'RUN apt-get update &amp;&amp; apt-get install -y --no-install-recommends \' \
+-		' build-essential gcc g++ make bison flex bc kmod cpio rsync \' \
+-		' gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \' \
+-		' libncurses-dev libssl-dev libelf-dev dwarves \' \
+-		' git curl ca-certificates xz-utils bzip2 \' \
+-		' python3 python3-dev python3-setuptools python3-pyelftools \' \
+-		' device-tree-compiler u-boot-tools swig libgnutls28-dev \' \
+-		' dosfstools e2fsprogs fdisk util-linux parted gdisk musl-tools xxd \' \
+-		' &amp;&amp; rm -rf /var/lib/apt/lists/*' \
+-		'WORKDIR /work' \
+-		&gt; "$(BUILD)/Dockerfile.radxa"
+-	docker build --platform linux/arm64 -t "$(RADXA_BUILDER)" -f "$(BUILD)/Dockerfile.radxa" "$(REPO_ROOT)"
+-
+-# Linux-only recipe: musl + kernel + toybox + mksh + tcc + skeleton + boot files
+-radxacm5io-rootfs:
+-	@test "$$(uname -s)" = Linux || { echo "radxacm5io-rootfs needs Linux (use: make radxacm5io)" &gt;&amp;2; exit 1; }
+-	@echo "==&gt; [radxacm5io] musl $(MUSLVER)"
+-	mkdir -p "$(BUILD)" "$(ROOTFS)"
+-	@if [ ! -d "$(MUSL_SRC)" ]; then curl -fsSL "$(MUSLURL)" | tar xz -C "$(BUILD)"; fi
+-	cd "$(MUSL_SRC)" &amp;&amp; ./configure --prefix="$(ROOTFS)" --enable-static &amp;&amp; \
+-		$(MAKE) -j$$(nproc) &amp;&amp; $(MAKE) install
+-	@echo "==&gt; [radxacm5io] linux $(RADXA_LINUXVER)"
+-	@# build tree on /tmp (case-sensitive; safe under Docker bind mounts)
+-	LINUX_BUILD="/tmp/lin0-build/linux-$(RADXA_LINUXVER)"; \
+-	mkdir -p /tmp/lin0-build "$(BUILD)/dtbs" "$(BUILD)/kheaders"; \
+-	if [ ! -f "$$LINUX_BUILD/Makefile" ]; then \
+-		rm -rf "$$LINUX_BUILD"; \
+-		case "$(RADXA_LINUXVER)" in \
+-			master|main) git clone --depth=1 https://github.com/torvalds/linux.git "$$LINUX_BUILD" ;; \
+-			*) git clone --depth=1 --branch "$(RADXA_LINUXVER)" https://github.com/torvalds/linux.git "$$LINUX_BUILD" \
+-				|| git clone --depth=1 https://github.com/torvalds/linux.git "$$LINUX_BUILD" ;; \
+-		esac; \
+-	fi; \
+-	cd "$$LINUX_BUILD"; \
+-	test -f arch/arm64/boot/dts/rockchip/$(RADXA_DTB:.dtb=.dts) || { \
+-		echo "missing $(RADXA_DTB:.dtb=.dts) — use RADXA_LINUXVER=master" &gt;&amp;2; exit 1; }; \
+-	if [ ! -f "$(CONFIGS)/radxacm5io-linux.config" ] || \
+-	   [ "$(CONFIGS)/radxacm5io-kernel.fragment" -nt "$(CONFIGS)/radxacm5io-linux.config" ]; then \
+-		sh "$(SCRIPTS)/gen-radxacm5io-linux-config.sh" "$$LINUX_BUILD"; \
+-	fi; \
+-	cp "$(CONFIGS)/radxacm5io-linux.config" .config; \
+-	$(MAKE) ARCH=arm64 olddefconfig; \
+-	if grep -q '^CONFIG_MODULES=y' .config; then \
+-		$(MAKE) ARCH=arm64 -j$$(nproc) Image modules dtbs; \
+-		INSTALL_MOD_PATH="$(ROOTFS)" $(MAKE) ARCH=arm64 modules_install; \
+-	else \
+-		$(MAKE) ARCH=arm64 -j$$(nproc) Image dtbs; \
+-	fi; \
+-	mkdir -p "$(ROOTFS)/boot"; \
+-	cp -f arch/arm64/boot/Image "$(ROOTFS)/boot/Image"; \
+-	cp -f arch/arm64/boot/dts/rockchip/$(RADXA_DTB) "$(ROOTFS)/boot/$(RADXA_DTB)"; \
+-	cp -f arch/arm64/boot/dts/rockchip/$(RADXA_DTB) "$(BUILD)/dtbs/"; \
+-	rm -rf /tmp/lin0-kheaders &amp;&amp; mkdir -p /tmp/lin0-kheaders; \
+-	INSTALL_HDR_PATH=/tmp/lin0-kheaders $(MAKE) ARCH=arm64 headers_install; \
+-	KHDR=""; \
+-	for c in /tmp/lin0-kheaders/include /tmp/lin0-kheaders/usr/include \
+-		"$$LINUX_BUILD/usr/include"; do \
+-		[ -f "$$c/linux/version.h" ] &amp;&amp; KHDR=$$c &amp;&amp; break; \
+-	done; \
+-	test -n "$$KHDR"; \
+-	cp -a "$$KHDR/." "$(BUILD)/kheaders/"; \
+-	mkdir -p "$(ROOTFS)/usr/include" &amp;&amp; cp -a "$$KHDR/." "$(ROOTFS)/usr/include/"
+-	@echo "==&gt; [radxacm5io] toybox"
+-	@if [ ! -d "$(TOYBOX_SRC)/.git" ]; then git clone --depth=1 "$(TOYBOXURL)" "$(TOYBOX_SRC)"; fi
+-	cd "$(TOYBOX_SRC)" &amp;&amp; git fetch origin &amp;&amp; git checkout master &amp;&amp; git pull --ff-only origin master || true
+-	cd "$(TOYBOX_SRC)" &amp;&amp; $(MAKE) distclean 2&gt;/dev/null || true
+-	# Use our config as KCONFIG_ALLCONFIG seed: kconfig keeps our selections
+-	# and fills new symbols with defaults.  This handles toys/pending (default n)
+-	# correctly because our config explicitly sets CONFIG_MODPROBE=y etc.
+-	cd "$(TOYBOX_SRC)" &amp;&amp; \
+-		KCONFIG_ALLCONFIG="$(CONFIGS)/radxacm5io-toybox.config" $(MAKE) allnoconfig &amp;&amp; \
+-		$(MAKE) CC=gcc CFLAGS="-static -Os" LDFLAGS="-static --no-pie" -j$$(nproc) toybox &amp;&amp; \
+-		./toybox modprobe --help &gt;/dev/null &amp;&amp; \
+-		$(MAKE) PREFIX="$(ROOTFS)/bin" install_flat
+-	@echo "==&gt; [radxacm5io] mksh"
+-	@if [ ! -f "$(MKSH_SRC)/Build.sh" ]; then curl -fsSL "$(MKSHURL)" | tar xz -C "$(BUILD)"; fi
+-	cd "$(MKSH_SRC)" &amp;&amp; chmod +x Build.sh &amp;&amp; CC="gcc -static" ./Build.sh \
+-		&amp;&amp; install -c -s -m 555 mksh "$(ROOTFS)/bin/sh"
+-	@echo "==&gt; [radxacm5io] tcc"
+-	rm -rf "$(TCC_SRC)" &amp;&amp; git clone --depth=1 "$(TCCURL)" "$(TCC_SRC)"
+-	cd "$(TCC_SRC)" &amp;&amp; ./configure --prefix=/ \
+-		--sysincludepaths="$(ROOTFS)/include" --libpaths="$(ROOTFS)/lib" \
+-		--tccdir=/lib --crtprefix="$(ROOTFS)/lib" --elfinterp="$(ROOTFS)/lib/libc.so" \
+-		--config-static --config-bcheck=no --disable-rpath --config-musl \
+-		&amp;&amp; $(MAKE) -j$$(nproc) &amp;&amp; $(MAKE) DESTDIR="$(ROOTFS)" install
+-	printf '%s\n' '#!/bin/sh' 'tcc -ar "$$@"' &gt; "$(ROOTFS)/bin/ar" &amp;&amp; chmod +x "$(ROOTFS)/bin/ar"
+-	cd "$(TCC_SRC)" &amp;&amp; ./configure --prefix=/ \
+-		--sysincludepaths="$(ROOTFS)/include:/include" --libpaths="$(ROOTFS)/lib:/lib" \
+-		--crtprefix=/lib --ar="$(ROOTFS)/bin/tcc -ar" --elfinterp=/lib/libc.so \
+-		--config-static --config-bcheck=no --disable-rpath --config-musl \
+-		&amp;&amp; $(MAKE) clean &amp;&amp; $(MAKE) -j$$(nproc) &amp;&amp; $(MAKE) DESTDIR="$(ROOTFS)" install
+-	mv "$(ROOTFS)/bin/tcc" "$(ROOTFS)/bin/cc"
+-	printf '%s\n' '#!/bin/sh' 'cc -ar "$$@"' &gt; "$(ROOTFS)/bin/ar" &amp;&amp; chmod +x "$(ROOTFS)/bin/ar"
+-	rm -f "$(ROOTFS)/lib/musl-gcc.specs" "$(ROOTFS)/bin/musl-gcc" 2&gt;/dev/null || true
+-	@echo "==&gt; [radxacm5io] skeleton + boot files"
+-	mkdir -p "$(ROOTFS)/bin" "$(ROOTFS)/etc" "$(ROOTFS)/home/root" \
+-		"$(ROOTFS)/dev/pts" "$(ROOTFS)/proc" "$(ROOTFS)/sys" "$(ROOTFS)/tmp" \
+-		"$(ROOTFS)/var/run" "$(ROOTFS)/run" "$(ROOTFS)/boot/extlinux" \
+-		"$(ROOTFS)/lib/firmware/rtlwifi"
+-	cp -a "$(REPO_ROOT)/etc/." "$(ROOTFS)/etc/"
+-	cp -f "$(REPO_ROOT)/init" "$(ROOTFS)/bin/init" &amp;&amp; chmod +x "$(ROOTFS)/bin/init"
+-	@if [ -f "$(ROOTFS)/lib/libc.so" ]; then \
+-		ln -sfn libc.so "$(ROOTFS)/lib/ld-musl-aarch64.so.1"; \
+-		ln -sfn libc.so "$(ROOTFS)/lib/ld-linux-aarch64.so.1" 2&gt;/dev/null || true; \
+-		ln -sf ../lib/libc.so "$(ROOTFS)/bin/ldd" 2&gt;/dev/null || true; \
+-		ln -sf ../lib/libc.so "$(ROOTFS)/bin/ld" 2&gt;/dev/null || true; \
+-	fi
+-	@grep -q '^root:' "$(ROOTFS)/etc/passwd" 2&gt;/dev/null || \
+-		echo 'root:x:0:0:root:/home/root:/bin/sh' &gt;&gt; "$(ROOTFS)/etc/passwd"
+-	echo "nameserver 1.1.1.1" &gt; "$(ROOTFS)/etc/resolv.conf"
+-	echo "lin0-cm5" &gt; "$(ROOTFS)/etc/hostname"
+-	@$(MAKE) radxacm5io-bootfiles
+-	@# drop stale module trees
+-	@if [ -d "$(ROOTFS)/lib/modules" ]; then \
+-		newest=""; for d in "$(ROOTFS)/lib/modules"/*; do \
+-			[ -f "$$d/modules.dep" ] || continue; \
+-			[ -z "$$newest" ] || [ "$$d" -nt "$$newest" ] &amp;&amp; newest=$$d; \
+-		done; \
+-		for d in "$(ROOTFS)/lib/modules"/*; do \
+-			[ -d "$$d" ] || continue; [ "$$d" = "$$newest" ] &amp;&amp; continue; \
+-			rm -rf "$$d"; \
+-		done; \
+-	fi
+-	@test -f "$(ROOTFS)/boot/Image" &amp;&amp; test -f "$(ROOTFS)/bin/init"
+-	@echo "radxacm5io-rootfs done"
+-
+-radxacm5io-bootfiles: $(REGDB) ## extlinux + wifi firmware into rootfs/
+-	mkdir -p "$(ROOTFS)/boot/extlinux" "$(ROOTFS)/boot/fat-extlinux" "$(ROOTFS)/lib/firmware/rtlwifi" "$(ROOTFS)/bin"
+-	@if [ -f "$(REPO_ROOT)/linux-firmware/rtlwifi/rtl8188eufw.bin" ]; then \
+-		cp -f "$(REPO_ROOT)/linux-firmware/rtlwifi/rtl8188eufw.bin" \
+-			"$(ROOTFS)/lib/firmware/rtlwifi/rtl8188eufw.bin"; \
+-	fi
++rootfs/boot/extlinux/extlinux.conf: rootfs/boot/Image $(RTL_FW_DST)
++	mkdir -p $(dir $@) rootfs/lib/firmware/rtlwifi rootfs/bin
+ 	printf '%s\n' \
+ 		'DEFAULT lin0' 'TIMEOUT 10' 'MENU TITLE lin0 CM5 IO' \
+ 		'LABEL lin0' '	MENU LABEL lin0 root=LABEL=$(RADXA_ROOT_LABEL)' \
+@@ -474,100 +448,142 @@ radxacm5io-bootfiles: $(REGDB) ## extlinux + wifi firmware into rootfs/
+ 		'LABEL lin0-mmc0' '	MENU LABEL lin0 root=/dev/mmcblk0p3' \
+ 		'	LINUX /boot/Image' '	FDT /boot/$(RADXA_DTB)' \
+ 		'	APPEND $(RADXA_CMN) root=/dev/mmcblk0p3 rootfstype=ext4' \
+-		&gt; "$(ROOTFS)/boot/extlinux/extlinux.conf"
++		&gt; $@
++
++rootfs/boot/fat-extlinux/extlinux.conf: rootfs/boot/Image
++	mkdir -p $(dir $@)
+ 	printf '%s\n' \
+ 		'DEFAULT lin0' 'TIMEOUT 10' 'MENU TITLE lin0 CM5 IO FAT' \
+ 		'LABEL lin0' '	MENU LABEL lin0' \
+ 		'	LINUX /Image' '	FDT /$(RADXA_DTB)' \
+ 		'	APPEND $(RADXA_CMN) root=LABEL=$(RADXA_ROOT_LABEL) rootfstype=ext4' \
+-		&gt; "$(ROOTFS)/boot/fat-extlinux/extlinux.conf"
+-	printf 'lin0 radxa-cm5-io\n' &gt; "$(ROOTFS)/boot/lin0.id"
+-	@if ! grep -q 'HDMI/tty0 console' "$(ROOTFS)/etc/issue" 2&gt;/dev/null; then \
+-		printf '\nlin0 on Radxa CM5 IO (HDMI/tty0 console)\n' &gt;&gt; "$(ROOTFS)/etc/issue"; \
+-	fi
++		&gt; $@
+ 
+-# Pack hybrid image from existing rootfs (dd head + GPT fix + docker/losetup p3)
+-radxacm5io-img:
+-	@test -f "$(RADXA_OFFICIAL)" || { echo "missing $(RADXA_OFFICIAL)" &gt;&amp;2; exit 1; }
+-	@test -f "$(ROOTFS)/boot/Image" || { echo "missing kernel; run make radxacm5io first" &gt;&amp;2; exit 1; }
+-	@test -f "$(ROOTFS)/bin/init" || { echo "missing $(ROOTFS)/bin/init" &gt;&amp;2; exit 1; }
+-	@cp -f "$(REPO_ROOT)/init" "$(ROOTFS)/bin/init" &amp;&amp; chmod +x "$(ROOTFS)/bin/init"
+-	@$(MAKE) radxacm5io-bootfiles
+-	@echo "==&gt; hybrid image $(RADXA_IMG) (p3=$(RADXA_P3_MB)MiB @ LBA $(RADXA_P3_LBA))"
+-	@mkdir -p "$(BUILD)"
++rootfs/boot/lin0.id:
++	mkdir -p $(dir $@)
++	printf 'lin0 radxa-cm5-io\n' &gt; $@
++
++.PHONY: radxacm5io-bootfiles
++radxacm5io-bootfiles: rootfs/boot/extlinux/extlinux.conf \
++	rootfs/boot/fat-extlinux/extlinux.conf rootfs/boot/lin0.id \
++	rootfs/lib/firmware/regulatory.db $(RTL_FW_DST)
++
++.PHONY: radxacm5io-postinstall
++radxacm5io-postinstall: skeleton radxacm5io-bootfiles
++	@echo "==&gt; [radxacm5io] post-install"
++	@ls -lh rootfs/bin/toybox $(ROOTFS_TLS_LIBS)
++
++# Build the arm64 toolchain image from an inline Dockerfile (Docker layer-caches repeats).
++.PHONY: radxacm5io-builder
++radxacm5io-builder:
++	docker info &gt;/dev/null
++	@echo "==&gt; $(RADXA_BUILDER)"
++	@printf '%s\n' \
++		'FROM debian:bookworm-slim' \
++		'ENV DEBIAN_FRONTEND=noninteractive' \
++		'RUN apt-get update &amp;&amp; apt-get install -y --no-install-recommends \' \
++		' $(RADXA_BUILDER_PKGS) \' \
++		' &amp;&amp; rm -rf /var/lib/apt/lists/*' \
++		'WORKDIR /work' \
++	| docker build --platform linux/arm64 -t "$(RADXA_BUILDER)" -
++
++# On macOS/host != Linux, build the whole rootfs inside the aarch64 builder image.
++.PHONY: radxacm5io-rootfs
++ifneq ($(HOST_OS),Linux)
++radxacm5io-rootfs:
++	$(run_platform_radxacm5io)
++else
++radxacm5io-rootfs:
++	@$(MAKE) PLATFORM=radxacm5io post-install-radxacm5io
++endif
++
++# Privileged p3 format/mount/rsync — piped into `docker run ... bash -s` (no script file).
++RADXA_P3_PKGS := util-linux e2fsprogs rsync
++
++.PHONY: radxacm5io-img
++radxacm5io-img: $(RADXA_OFFICIAL) radxacm5io-rootfs
++	@echo "==&gt; hybrid image lin0-radxacm5io.img (p3=$(RADXA_P3_MB)MiB)"
+ 	@P3_SECTS=$$(($(RADXA_P3_MB)*1024*1024/512)); \
+ 	HEAD_BYTES=$$(($(RADXA_P3_LBA)*512)); \
+ 	TOTAL_BYTES=$$((($(RADXA_P3_LBA)+P3_SECTS)*512)); \
+-	rm -f "$(RADXA_IMG)"; \
+-	dd if="$(RADXA_OFFICIAL)" of="$(RADXA_IMG)" bs=4M \
++	rm -f lin0-radxacm5io.img; \
++	dd if="$(RADXA_OFFICIAL)" of=lin0-radxacm5io.img bs=4M \
+ 		count=$$(((HEAD_BYTES+4194303)/4194304)) status=none; \
+-	python3 -c "p=r'$(RADXA_IMG)';h=$$HEAD_BYTES;t=$$TOTAL_BYTES;f=open(p,'r+b');f.truncate(h);f.seek(t-1);f.write(b'\\0');f.close();print('image bytes',t)"; \
+-	python3 "$(SCRIPTS)/gpt-resize-p3.py" "$(RADXA_IMG)" "$(RADXA_P3_LBA)" "$$P3_SECTS"; \
++	python3 -c "p='lin0-radxacm5io.img';h=$$HEAD_BYTES;t=$$TOTAL_BYTES;f=open(p,'r+b');f.truncate(h);f.seek(t-1);f.write(b'\\0');f.close();print('image bytes',t)"; \
++	python3 scripts/gpt-resize-p3.py lin0-radxacm5io.img $(RADXA_P3_LBA) $$P3_SECTS; \
+ 	printf '%s\n' \
+-		'#!/bin/bash' 'set -euo pipefail' 'export DEBIAN_FRONTEND=noninteractive' \
+-		'apt-get update -qq &amp;&amp; apt-get install -y -qq util-linux e2fsprogs rsync &gt;/dev/null' \
+-		'IMG=/work/lin0-radxacm5io.img; ROOTFS=/work/rootfs; MNT=/mnt/p3; mkdir -p "$$MNT"' \
+-		'OFF=$$((P3_START_LBA*512)); SZ=$$((P3_SECTS*512))' \
++		'set -euo pipefail' \
++		'export DEBIAN_FRONTEND=noninteractive' \
++		'apt-get update -qq &amp;&amp; apt-get install -y -qq $(RADXA_P3_PKGS) &gt;/dev/null' \
++		'IMG=/work/lin0-radxacm5io.img' \
++		'ROOTFS=/work/rootfs' \
++		'MNT=/mnt/p3' \
++		'mkdir -p "$$MNT"' \
++		'OFF=$$((P3_START_LBA*512))' \
++		'SZ=$$((P3_SECTS*512))' \
+ 		'LOOP=$$(losetup --find --show -o "$$OFF" --sizelimit "$$SZ" "$$IMG")' \
+ 		'mkfs.ext4 -F -L "$$ROOT_LABEL" -U "$$ROOT_UUID" "$$LOOP"' \
+-		'mount "$$LOOP" "$$MNT"; rsync -aH "$$ROOTFS"/ "$$MNT"/' \
++		'mount "$$LOOP" "$$MNT"' \
++		'rsync -aH "$$ROOTFS"/ "$$MNT"/' \
+ 		'if [ -f "$$MNT/lib/libc.so" ]; then chmod 755 "$$MNT/lib/libc.so"; ln -sfn libc.so "$$MNT/lib/ld-musl-aarch64.so.1"; fi' \
+ 		'mkdir -p "$$MNT/bin" "$$MNT/boot/extlinux" "$$MNT/proc" "$$MNT/sys" "$$MNT/dev" "$$MNT/tmp" "$$MNT/run"' \
+ 		'install -m 0755 /work/init "$$MNT/bin/init"' \
+ 		'install -m 0644 "$$ROOTFS/boot/Image" "$$MNT/boot/Image"' \
+-		'install -m 0644 "$$ROOTFS/boot/'"$(RADXA_DTB)"'" "$$MNT/boot/'"$(RADXA_DTB)"'"' \
+-		'cat &gt; "$$MNT/boot/extlinux/extlinux.conf" &lt;&lt; EOF' \
+-		'default emmc' 'timeout 20' 'menu title lin0 CM5 IO' \
+-		'label emmc' '  menu label root=/dev/mmcblk0p3' \
+-		'  linux /boot/Image' '  fdt /boot/'"$(RADXA_DTB)" \
+-		'  append root=/dev/mmcblk0p3 '"$(RADXA_CMN)"' rootfstype=ext4' \
+-		'label bylabel' '  menu label root=LABEL='"$(RADXA_ROOT_LABEL)" \
+-		'  linux /boot/Image' '  fdt /boot/'"$(RADXA_DTB)" \
+-		'  append root=LABEL='"$(RADXA_ROOT_LABEL)"' '"$(RADXA_CMN)"' rootfstype=ext4' \
+-		'EOF' \
+-		'sync; umount "$$MNT"; losetup -d "$$LOOP"; echo p3 done' \
+-		&gt; "$(BUILD)/radxa-p3.sh"; \
+-	docker run --rm --privileged \
++		'install -m 0644 "$$ROOTFS/boot/$(RADXA_DTB)" "$$MNT/boot/$(RADXA_DTB)"' \
++		'printf "%s\n" "default emmc" "timeout 20" "menu title lin0 CM5 IO" "label emmc" "  menu label root=/dev/mmcblk0p3" "  linux /boot/Image" "  fdt /boot/$(RADXA_DTB)" "  append root=/dev/mmcblk0p3 $(RADXA_CMN) rootfstype=ext4" "label bylabel" "  menu label root=LABEL=$(RADXA_ROOT_LABEL)" "  linux /boot/Image" "  fdt /boot/$(RADXA_DTB)" "  append root=LABEL=$(RADXA_ROOT_LABEL) $(RADXA_CMN) rootfstype=ext4" &gt; "$$MNT/boot/extlinux/extlinux.conf"' \
++		'sync' \
++		'umount "$$MNT"' \
++		'losetup -d "$$LOOP"' \
++		'echo p3 done' \
++	| docker run --rm -i --privileged \
+ 		-e P3_START_LBA="$(RADXA_P3_LBA)" -e P3_SECTS="$$P3_SECTS" \
+ 		-e ROOT_UUID="$(RADXA_ROOT_UUID)" -e ROOT_LABEL="$(RADXA_ROOT_LABEL)" \
+-		-v "$(REPO_ROOT):/work" debian:bookworm-slim \
+-		bash /work/build/radxa-p3.sh
+-	@ls -lh "$(RADXA_IMG)"
++		-v "$(CURDIR):/work" debian:bookworm-slim \
++		bash -s
++	@ls -lh lin0-radxacm5io.img
++
++.PHONY: radxacm5io
++radxacm5io: radxacm5io-img
++	@echo "==&gt; tar rootfs-radxacm5io.tar.xz"
++	cd rootfs &amp;&amp; tar cfJ $(CURDIR)/rootfs-radxacm5io.tar.xz .
++	@ls -lh lin0-radxacm5io.img rootfs-radxacm5io.tar.xz
+ 	@echo "Flash: rkdeveloptool wl 0 lin0-radxacm5io.img"
+ 
+-# --- meta -------------------------------------------------------------------
++# --- aliases / meta ---------------------------------------------------------
+ 
+ .PHONY: all help list clean distclean umount-rootfs mount-rootfs
++.PHONY: arm64 radxa radxa-cm5 radxa-cm5-io cm5io cm5-io
++.PHONY: rpi-zero rpi-zero-w rpizero-w rpi0 rpi0w zerow rpizero-img
++
++arm64: aarch64
++radxa radxa-cm5 radxa-cm5-io cm5io cm5-io: radxacm5io
++rpi-zero rpi-zero-w rpizero-w rpi0 rpi0w zerow: rpizero
++rpizero-img: rootfs-rpizero.tar.xz
++	scripts/mkimg-rpizero.sh
+ 
+ all: $(PLATFORM)
+ 
+ help:
+-	@echo "lin0 — Make targets (real file deps where possible)."
+-	@echo ""
+-	@echo "  make &lt;platform&gt;     one of: $(PLATFORMS)"
+-	@echo "  make radxacm5io     Radxa CM5 IO hybrid image (Docker on macOS)"
+-	@echo "  make radxacm5io-img re-pack image from existing rootfs/"
+-	@echo "  make list | clean | distclean"
+-	@echo ""
+-	@echo "Radxa env: RADXA_LINUXVER=$(RADXA_LINUXVER)  RADXA_P3_MB=$(RADXA_P3_MB)"
+-	@echo "Edit configs/radxacm5io-* , init, etc/ — then rebuild."
++	@echo "lin0 — literal path targets, pattern copies from etc/ and init."
++	@echo "  make &lt;platform&gt;   one of: $(PLATFORMS)"
++	@echo "  make radxacm5io   rootfs tarball + hybrid image"
++	@echo "  Edit etc/*, init, configs/* — then rebuild."
+ 
+ list:
+ 	@echo "Platforms: $(PLATFORMS)"
+-	@echo "Aliases: arm64-&gt;aarch64; radxa|cm5io-&gt;radxacm5io; rpi-zero-&gt;rpizero"
+ 
+ umount-rootfs:
+-	@sudo $(SCRIPTS)/umounts.sh 2&gt;/dev/null || true
++	-sudo scripts/umounts.sh &gt;/dev/null
+ 
+ mount-rootfs:
+-	@sudo $(SCRIPTS)/mounts.sh
++	sudo scripts/mounts.sh
+ 
+ clean: umount-rootfs
+-	rm -rf $(ROOTFS) $(foreach p,$(STD_PLATS),$(BUILD)/$(p))
+-	rm -f $(REPO_ROOT)/rootfs-*.tar.xz
++	rm -rf rootfs build/tls-include
++	rm -f rootfs-*.tar.xz build/cacert.pem build/cacert.pem.tmp*
+ 
+ distclean: umount-rootfs
+-	rm -rf $(BUILD) $(ROOTFS)
+-	rm -f $(REPO_ROOT)/rootfs-*.tar.xz $(REPO_ROOT)/lin0-*.img $(REPO_ROOT)/lin0-*.tar.xz
++	rm -rf build rootfs
++	rm -f rootfs-*.tar.xz lin0-*.img lin0-*.tar.xz
+ 
+ .DEFAULT_GOAL := all
+diff --git a/README.md b/README.md
+index 3a3b1bb..d0e9591 100644
+--- a/README.md
++++ b/README.md
+@@ -121,7 +121,7 @@ Supported architectures match the tarballs.
+ 
+ ### Radxa CM5 + IO shield (mainline)
+ 
+-Builds a complete bootable **disk image** (mainline kernel on `torvalds/linux` master for `rk3588s-radxa-cm5-io.dts`; stock Radxa U-Boot from the official image). Docker is used automatically on macOS for the arm64 kernel compile and privileged disk image packing:
++Builds a complete bootable **disk image** (mainline kernel on `torvalds/linux` master for `rk3588s-radxa-cm5-io.dts`; stock Radxa U-Boot from the official image). On macOS, `make` spins up an inline Debian arm64 builder image for the kernel/rootfs compile, then pipes an inline pack script into a privileged container (no extra Dockerfile or `radxa-p3.sh`):
+ 
+ ```sh
+ git clone https://terminal.pink/lin0
+@@ -244,13 +244,25 @@ lin0 provides a minimal base system — to make it usable, you'll need to do a f
+ 
+ #### 1. Set up networking (DNS)
+ 
+-Create a simple `/etc/resolv.conf`:
++Default DNS is shipped in `etc/resolv.conf` (copied into the image). Edit that
++file in the repo for build-time defaults, or override on the running system:
+ 
+ ```sh
+-echo "nameserver 1.1.1.1" &gt; /etc/resolv.conf
++vi /etc/resolv.conf
+ ```
+ 
+-Replace 1.1.1.1 with your preferred DNS server if needed.
++TLS trust anchors are **not** under `etc/`: `make` downloads Mozilla’s CA bundle
++from [curl.se/ca/cacert.pem](https://curl.se/ca/cacert.pem) (SHA-256 pinned as
++`CACERT_SHA256` in the Makefile) into `rootfs/etc/ssl/cert.pem` and
++`rootfs/etc/ssl/certs/ca-certificates.crt`. On every board, `toybox`/`wget` is
++dynamically linked against **BearSSL** + **libtls-bearssl**
++(`rootfs/lib/libbearssl.so*`, `rootfs/lib/libtls.so*`) plus musl `libc.so`;
++libtls loads that CA bundle by default (`/etc/ssl/cert.pem`). Bump the hash when
++refreshing the bundle.
++
++
++All other static system config belongs in `etc/` (generic only — no per-platform
++copies).
+ 
+ 
+ #### 2. Add users
+diff --git a/configs/hpelitedesk-toybox.config b/configs/hpelitedesk-toybox.config
+index 6202ee3..c39d490 100644
+--- a/configs/hpelitedesk-toybox.config
++++ b/configs/hpelitedesk-toybox.config
+@@ -316,8 +316,8 @@ CONFIG_PING=y
+ CONFIG_RFKILL=y
+ # CONFIG_SNTP is not set
+ # CONFIG_TUNCTL is not set
+-# CONFIG_WGET is not set
+-# CONFIG_WGET_LIBTLS is not set
++CONFIG_WGET=y
++CONFIG_WGET_LIBTLS=y
+ 
+ #
+ # Linux Standard Base commands
+diff --git a/configs/m1mac-toybox.config b/configs/m1mac-toybox.config
+index 6202ee3..c39d490 100644
+--- a/configs/m1mac-toybox.config
++++ b/configs/m1mac-toybox.config
+@@ -316,8 +316,8 @@ CONFIG_PING=y
+ CONFIG_RFKILL=y
+ # CONFIG_SNTP is not set
+ # CONFIG_TUNCTL is not set
+-# CONFIG_WGET is not set
+-# CONFIG_WGET_LIBTLS is not set
++CONFIG_WGET=y
++CONFIG_WGET_LIBTLS=y
+ 
+ #
+ # Linux Standard Base commands
+diff --git a/configs/pinebookpro-toybox.config b/configs/pinebookpro-toybox.config
+index 6202ee3..c39d490 100644
+--- a/configs/pinebookpro-toybox.config
++++ b/configs/pinebookpro-toybox.config
+@@ -316,8 +316,8 @@ CONFIG_PING=y
+ CONFIG_RFKILL=y
+ # CONFIG_SNTP is not set
+ # CONFIG_TUNCTL is not set
+-# CONFIG_WGET is not set
+-# CONFIG_WGET_LIBTLS is not set
++CONFIG_WGET=y
++CONFIG_WGET_LIBTLS=y
+ 
+ #
+ # Linux Standard Base commands
+diff --git a/configs/radxacm5io-kernel.fragment b/configs/radxacm5io-kernel.fragment
+index 98f41e8..5e3abbe 100644
+--- a/configs/radxacm5io-kernel.fragment
++++ b/configs/radxacm5io-kernel.fragment
+@@ -300,6 +300,15 @@ CONFIG_SPI_ROCKCHIP=y
+ CONFIG_SPI_ROCKCHIP_SFC=y
+ CONFIG_RTC_CLASS=y
+ CONFIG_RTC_HCTOSYS=y
++CONFIG_RTC_HCTOSYS_DEVICE="rtc0"
++CONFIG_RTC_SYSTOHC=y
++CONFIG_RTC_SYSTOHC_DEVICE="rtc0"
++CONFIG_RTC_INTF_SYSFS=y
++CONFIG_RTC_INTF_PROC=y
++CONFIG_RTC_INTF_DEV=y
++# CM5 IO backup RTC is Haoyu HYM8563 on i2c6 (not RK806, which has no RTC).
++CONFIG_RTC_DRV_HYM8563=y
++# RK8xx RTC for boards that use RK805/808/809/817/818 PMICs.
+ CONFIG_RTC_DRV_RK808=y
+ 
+ # --- DMA ---
+diff --git a/configs/radxacm5io-linux.config b/configs/radxacm5io-linux.config
+index 4f834fc..32f8cf4 100644
+--- a/configs/radxacm5io-linux.config
++++ b/configs/radxacm5io-linux.config
+@@ -3119,7 +3119,7 @@ CONFIG_RTC_INTF_DEV=y
+ # CONFIG_RTC_DRV_DS1307 is not set
+ # CONFIG_RTC_DRV_DS1374 is not set
+ # CONFIG_RTC_DRV_DS1672 is not set
+-# CONFIG_RTC_DRV_HYM8563 is not set
++CONFIG_RTC_DRV_HYM8563=y
+ # CONFIG_RTC_DRV_MAX6900 is not set
+ # CONFIG_RTC_DRV_MAX31335 is not set
+ # CONFIG_RTC_DRV_NCT3018Y is not set
+diff --git a/configs/radxacm5io-toybox.config b/configs/radxacm5io-toybox.config
+index 24eca26..9aaff45 100755
+--- a/configs/radxacm5io-toybox.config
++++ b/configs/radxacm5io-toybox.config
+@@ -311,7 +311,7 @@ CONFIG_RFKILL=y
+ # CONFIG_SNTP is not set
+ # CONFIG_TUNCTL is not set
+ CONFIG_WGET=y
+-# CONFIG_WGET_LIBTLS is not set
++CONFIG_WGET_LIBTLS=y
+ 
+ #
+ # Linux Standard Base commands
+diff --git a/configs/rpi-cm5io-toybox.config b/configs/rpi-cm5io-toybox.config
+index 6f2fef1..9f7204a 100644
+--- a/configs/rpi-cm5io-toybox.config
++++ b/configs/rpi-cm5io-toybox.config
+@@ -311,7 +311,7 @@ CONFIG_RFKILL=y
+ # CONFIG_SNTP is not set
+ # CONFIG_TUNCTL is not set
+ CONFIG_WGET=y
+-# CONFIG_WGET_LIBTLS is not set
++CONFIG_WGET_LIBTLS=y
+ 
+ #
+ # Linux Standard Base commands
+diff --git a/configs/x86_64-toybox.config b/configs/x86_64-toybox.config
+index 6202ee3..c39d490 100644
+--- a/configs/x86_64-toybox.config
++++ b/configs/x86_64-toybox.config
+@@ -316,8 +316,8 @@ CONFIG_PING=y
+ CONFIG_RFKILL=y
+ # CONFIG_SNTP is not set
+ # CONFIG_TUNCTL is not set
+-# CONFIG_WGET is not set
+-# CONFIG_WGET_LIBTLS is not set
++CONFIG_WGET=y
++CONFIG_WGET_LIBTLS=y
+ 
+ #
+ # Linux Standard Base commands
+diff --git a/etc/hostname b/etc/hostname
+new file mode 100644
+index 0000000..197b84d
+--- /dev/null
++++ b/etc/hostname
+@@ -0,0 +1 @@
++lin0
+diff --git a/etc/issue b/etc/issue
+index 75856f3..3dfa4b0 100644
+--- a/etc/issue
++++ b/etc/issue
+@@ -1,18 +1,16 @@
+-	+-------------------------------------------------------------------+
+-	|                                                                   |
+-	|                 _._                                               |
+-	|               e/` '\\,.eo-__.        Welcome to LIN0 v0.0.2!       |
+-	|              '/.' .|_/e--. '\\e                                    |
+-	|        ,;-o-.'|`  //e    e\\ |`      This software is licensed     |
+-	|      ./' ,e0\\o   //-o.__. ,. \\'     under the BSD 2-clause        |
+-	|     ./` /' -/e   e\\o_/___.  \\|'     license.                      |
+-	|     e|`/`,o-o\\  /v-/e_.  '\\. \\.                                   |
+-	|    '/  ._e._, \\ //    \\`  \\e |'                                   |
+-	|    '|'"/     \\.V |    `|' `|'|`                                   |
+-	|    `|e`|'    | # /    `|.  |`|`                                   |
+-	|    e|` `    /\\- ,\\    e|'  '\\`                                    |
+-	|     '`    _/  / / \\     `  `|'                                    |
+-	|       .,wW'^^^//;^-^;^;w_           (C) 2023-25 Brian Mayer       |
+-	|                                                                   |
+-	|                                                                   |
+-	+-------------------------------------------------------------------+
++
++	             _._
++	           e/` '\\,.eo-__.         Welcome to Lin0
++	          '/.' .|_/e--. '\\e
++	    ,;-o-.'|`  //e    e\\ |`       This software is licensed
++	  ./' ,e0\\o   //-o.__. ,. \\'      under the BSD 2-clause license.
++	 ./` /' -/e   e\\o_/___.  \\|'
++	 e|`/`,o-o\\  /v-/e_.  '\\. \\.
++	'/  ._e._, \\ //    \\`  \\e |'      (C) 2023-26 Brian Mayer
++	'|'"/     \\.V |    `|' `|'|`
++	`|e`|'    | # /    `|.  |`|`
++	e|` `    /\\- ,\\    e|'  '\\`
++	 '`    _/  / / \\     `  `|'
++	   .,wW'^^^//;^-^;^;w_
++
++
+diff --git a/etc/resolv.conf b/etc/resolv.conf
+new file mode 100644
+index 0000000..aaec989
+--- /dev/null
++++ b/etc/resolv.conf
+@@ -0,0 +1,2 @@
++nameserver 1.1.1.1
++nameserver 2606:4700:4700::1111
+diff --git a/init b/init
+index 104cd16..1d94ee9 100755
+--- a/init
++++ b/init
+@@ -2,6 +2,12 @@
+ 
+ export PATH=/bin
+ 
++# Stay PID 1: toybox poweroff/reboot/halt send SIGUSR2/TERM/USR1 to init.
++# exec'ing getty would make getty PID 1 and those signals do nothing.
++trap 'sync; poweroff -f' USR2
++trap 'sync; reboot -f' TERM
++trap 'sync; halt -f' USR1
++
+ mount -t proc proc /proc
+ dmesg -n 1
+ mount -t sysfs sysfs /sys
+@@ -10,4 +16,16 @@ mount -t tmpfs tmpfs /var/run
+ mount -t devtmpfs devtmpfs /dev
+ mount -t vfat /dev/mmcblk0p1 /boot
+ 
+-exec getty 115200 /dev/tty0 linux
++modprobe hid_apple
++modprobe realtek
++modprobe rtl8150
++modprobe r8152
++modprobe cfg80211
++modprobe mac80211
++modprobe rfkill
++modprobe rtl8xxxu
++
++clear
++while true; do
++	getty 115200 tty0 linux
++done
+diff --git a/patches/.DS_Store b/patches/.DS_Store
+new file mode 100644
+index 0000000..4c690cb
+Binary files /dev/null and b/patches/.DS_Store differ
+diff --git a/patches/linux-radxacm5io-0001-add-hym8563-rtc.patch b/patches/linux-radxacm5io-0001-add-hym8563-rtc.patch
+new file mode 100644
+index 0000000..d75e71b
+--- /dev/null
++++ b/patches/linux-radxacm5io-0001-add-hym8563-rtc.patch
+@@ -0,0 +1,69 @@
++From 8841981021b5f98522ad44fe40e11d0c0e756534 Mon Sep 17 00:00:00 2001
++From: Brian Mayer &lt;bleemayer@gmail.com&gt;
++Date: Thu, 2 Jul 2026 14:51:51 -0300
++Subject: [PATCH] arm64: dts: rockchip: add HYM8563 RTC to Radxa CM5 IO board
++
++The Radxa CM5 IO carrier has a Haoyu HYM8563 real-time clock on I2C6 at
++address 0x51, with its interrupt line on GPIO0_B0 and a CR1220 backup
++battery holder. Without a device tree node, no /dev/rtc* appears even
++when CONFIG_RTC_DRV_HYM8563 is enabled.
++
++Describe the RTC, wire the interrupt pin with a pull-up, mark it as a
++wakeup source, and point the rtc0 alias at it so RTC_HCTOSYS/SYSTOHC use
++the external clock. Wiring matches Radxa's downstream board support.
++
++Signed-off-by: Brian Mayer &lt;bleemayer@gmail.com&gt;
++Tested-by: Brian Mayer &lt;bleemayer@gmail.com&gt;
++---
++ .../dts/rockchip/rk3588s-radxa-cm5-io.dts     | 19 +++++++++++++++++++
++ 1 file changed, 19 insertions(+)
++
++diff --git a/arch/arm64/boot/dts/rockchip/rk3588s-radxa-cm5-io.dts b/arch/arm64/boot/dts/rockchip/rk3588s-radxa-cm5-io.dts
++index af4a9bc01..1a2c72831 100644
++--- a/arch/arm64/boot/dts/rockchip/rk3588s-radxa-cm5-io.dts
+++++ b/arch/arm64/boot/dts/rockchip/rk3588s-radxa-cm5-io.dts
++@@ -19,6 +19,7 @@ / {
++ 	aliases {
++ 		ethernet0 = &amp;gmac1;
++ 		mmc1 = &amp;sdmmc;
+++		rtc0 = &amp;hym8563;
++ 	};
++ 
++ 	chosen {
++@@ -198,6 +199,18 @@ usbc0_dp_altmode_mux: endpoint {
++ 			};
++ 		};
++ 	};
+++
+++	hym8563: rtc@51 {
+++		compatible = "haoyu,hym8563";
+++		reg = &lt;0x51&gt;;
+++		#clock-cells = &lt;0&gt;;
+++		clock-output-names = "hym8563";
+++		interrupt-parent = &lt;&amp;gpio0&gt;;
+++		interrupts = &lt;RK_PB0 IRQ_TYPE_LEVEL_LOW&gt;;
+++		pinctrl-names = "default";
+++		pinctrl-0 = &lt;&amp;rtc_int&gt;;
+++		wakeup-source;
+++	};
++ };
++ 
++ &amp;i2s5_8ch {
++@@ -221,6 +234,12 @@ usbc0_int: usbc0-int {
++ 		};
++ 	};
++ 
+++	hym8563 {
+++		rtc_int: rtc-int {
+++			rockchip,pins = &lt;0 RK_PB0 RK_FUNC_GPIO &amp;pcfg_pull_up&gt;;
+++		};
+++	};
+++
++ 	hdmi {
++ 		hdmi0_tx_on_h: hdmi0-tx-on-h {
++ 			rockchip,pins = &lt;4 RK_PB6 RK_FUNC_GPIO &amp;pcfg_pull_none&gt;;
++
++base-commit: 87320be9f0d24fce67631b7eef919f0b79c3e45c
++-- 
++2.54.0
++
+diff --git a/patches/upstream/0001-arm64-dts-rockchip-add-HYM8563-RTC-to-Radxa-CM5-IO-b.patch b/patches/upstream/0001-arm64-dts-rockchip-add-HYM8563-RTC-to-Radxa-CM5-IO-b.patch
+new file mode 100644
+index 0000000..d75e71b
+--- /dev/null
++++ b/patches/upstream/0001-arm64-dts-rockchip-add-HYM8563-RTC-to-Radxa-CM5-IO-b.patch
+@@ -0,0 +1,69 @@
++From 8841981021b5f98522ad44fe40e11d0c0e756534 Mon Sep 17 00:00:00 2001
++From: Brian Mayer &lt;bleemayer@gmail.com&gt;
++Date: Thu, 2 Jul 2026 14:51:51 -0300
++Subject: [PATCH] arm64: dts: rockchip: add HYM8563 RTC to Radxa CM5 IO board
++
++The Radxa CM5 IO carrier has a Haoyu HYM8563 real-time clock on I2C6 at
++address 0x51, with its interrupt line on GPIO0_B0 and a CR1220 backup
++battery holder. Without a device tree node, no /dev/rtc* appears even
++when CONFIG_RTC_DRV_HYM8563 is enabled.
++
++Describe the RTC, wire the interrupt pin with a pull-up, mark it as a
++wakeup source, and point the rtc0 alias at it so RTC_HCTOSYS/SYSTOHC use
++the external clock. Wiring matches Radxa's downstream board support.
++
++Signed-off-by: Brian Mayer &lt;bleemayer@gmail.com&gt;
++Tested-by: Brian Mayer &lt;bleemayer@gmail.com&gt;
++---
++ .../dts/rockchip/rk3588s-radxa-cm5-io.dts     | 19 +++++++++++++++++++
++ 1 file changed, 19 insertions(+)
++
++diff --git a/arch/arm64/boot/dts/rockchip/rk3588s-radxa-cm5-io.dts b/arch/arm64/boot/dts/rockchip/rk3588s-radxa-cm5-io.dts
++index af4a9bc01..1a2c72831 100644
++--- a/arch/arm64/boot/dts/rockchip/rk3588s-radxa-cm5-io.dts
+++++ b/arch/arm64/boot/dts/rockchip/rk3588s-radxa-cm5-io.dts
++@@ -19,6 +19,7 @@ / {
++ 	aliases {
++ 		ethernet0 = &amp;gmac1;
++ 		mmc1 = &amp;sdmmc;
+++		rtc0 = &amp;hym8563;
++ 	};
++ 
++ 	chosen {
++@@ -198,6 +199,18 @@ usbc0_dp_altmode_mux: endpoint {
++ 			};
++ 		};
++ 	};
+++
+++	hym8563: rtc@51 {
+++		compatible = "haoyu,hym8563";
+++		reg = &lt;0x51&gt;;
+++		#clock-cells = &lt;0&gt;;
+++		clock-output-names = "hym8563";
+++		interrupt-parent = &lt;&amp;gpio0&gt;;
+++		interrupts = &lt;RK_PB0 IRQ_TYPE_LEVEL_LOW&gt;;
+++		pinctrl-names = "default";
+++		pinctrl-0 = &lt;&amp;rtc_int&gt;;
+++		wakeup-source;
+++	};
++ };
++ 
++ &amp;i2s5_8ch {
++@@ -221,6 +234,12 @@ usbc0_int: usbc0-int {
++ 		};
++ 	};
++ 
+++	hym8563 {
+++		rtc_int: rtc-int {
+++			rockchip,pins = &lt;0 RK_PB0 RK_FUNC_GPIO &amp;pcfg_pull_up&gt;;
+++		};
+++	};
+++
++ 	hdmi {
++ 		hdmi0_tx_on_h: hdmi0-tx-on-h {
++ 			rockchip,pins = &lt;4 RK_PB6 RK_FUNC_GPIO &amp;pcfg_pull_none&gt;;
++
++base-commit: 87320be9f0d24fce67631b7eef919f0b79c3e45c
++-- 
++2.54.0
++
+diff --git a/patches/upstream/cover-letter.txt b/patches/upstream/cover-letter.txt
+new file mode 100644
+index 0000000..ddfbd15
+--- /dev/null
++++ b/patches/upstream/cover-letter.txt
+@@ -0,0 +1,8 @@
++Hi kernel team.
++
++I was testing building the kernel for my radxa cm5+io shield, and turns
++out there is no rtc in the DTS, so i got it from the radxa files.
++This is my first email to you, please help me correct it if something is
++off the standards.
++
++Best, Brian
+diff --git a/rootfs-radxacm5io.tar.xz b/rootfs-radxacm5io.tar.xz
+index ee4dad3..75c50d3 100644
+Binary files a/rootfs-radxacm5io.tar.xz and b/rootfs-radxacm5io.tar.xz differ
+diff --git a/scripts/post-install-rpizero.sh b/scripts/post-install-rpizero.sh
+index ee18f56..e2cc765 100755
+--- a/scripts/post-install-rpizero.sh
++++ b/scripts/post-install-rpizero.sh
+@@ -86,9 +86,6 @@ if [ -d "$FW_SRC/brcm" ]; then
+ 	cp -f "$FW_SRC/brcm/LICENSE.broadcom_bcm43xx" "$ROOTFS/lib/firmware/brcm/" 2&gt;/dev/null || true
+ fi
+ 
+-# hostname for this board
+-echo rpizero &gt; "$ROOTFS/etc/hostname" 2&gt;/dev/null || true
+-
+ echo "rpizero post-install: boot files in $BOOT (kernel.img, $DTB, config.txt, cmdline.txt)"
+ echo "  flash: partition SD (p1 FAT boot, p2 ext4 root), copy $BOOT/* to p1, rootfs to p2"
+ echo "  or: make rpizero-img  (if mkimg-rpizero.sh present)"
+</pre>

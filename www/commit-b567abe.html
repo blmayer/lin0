@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lin0 b567abe</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}</style>
+<pre>
+<a href=index.html>lin0</a> / <b>commit</b>
+
+<a href=log.html>log</a> | <a href=tree.html>tree</a> | <a href=refs.html>refs</a>
+
+commit b567abe
+parent <a href=commit-1d0bb3b.html>1d0bb3b</a> 
+author myr &lt;myr@terminal.pink&gt;
+date   2025-01-09T13:12:09-03:00
+
+    Created new rootfs for x86_64
+
+    - updated make.sh
+    - renamed configs
+
+<a href=tree-b567abe.html>tree</a>
+
+<b>diff</b>
+
+diff --git a/configs/generic-x86_64-linux.config b/configs/x86_64-linux.config
+similarity index 100%
+rename from configs/generic-x86_64-linux.config
+rename to configs/x86_64-linux.config
+diff --git a/configs/generic-x86_64-toybox.config b/configs/x86_64-toybox.config
+similarity index 100%
+rename from configs/generic-x86_64-toybox.config
+rename to configs/x86_64-toybox.config
+diff --git a/make.sh b/make.sh
+index 1226ae3..c580eef 100755
+--- a/make.sh
++++ b/make.sh
+@@ -13,11 +13,11 @@ toyboxurl="https://github.com/landley/toybox.git"
+ mkshurl="http://www.mirbsd.org/MirOS/dist/mir/mksh/mksh-R59c.tgz"
+ bashurl="https://ftp.gnu.org/gnu/bash/bash-5.2.37.tar.gz"
+ makeurl="https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz"
+-bmakeurl="https://www.crufty.net/ftp/pub/sjg/bmake.tar.gz"
+-curlurl="https://curl.se/tiny/tiny-curl-8.11.0.tar.xz"
++#bmakeurl="https://www.crufty.net/ftp/pub/sjg/bmake.tar.gz"
++curlurl="https://curl.se/tiny/tiny-curl-8.4.0.tar.gz"
+ dashurl="http://gondor.apana.org.au/~herbert/dash/files/dash-0.5.12.tar.gz"
+ 
+-[ -z "$PLATFORM" ] &amp;&amp; PLATFORM="generic-$(uname -m)"
++[ -z "$PLATFORM" ] &amp;&amp; PLATFORM="$(uname -m)"
+ 
+ export outdir="$(pwd)/rootfs"
+ 
+@@ -147,7 +147,7 @@ git clone "$tccurl"
+ curl "$muslurl" | tar xz
+ git clone "$toyboxurl"
+ curl "$mkshurl" | tar xz
+-curl "$bmakeurl" | tar xz
++curl "$makeurl" | tar xz
+ curl "$curlurl" | tar xz
+ curl "$linuxurl" | tar xz
+ cd ../../ # back to lin0 dir
+diff --git a/rootfs-x86_64.tar.xz b/rootfs-x86_64.tar.xz
+new file mode 100644
+index 0000000..03a27dd
+Binary files /dev/null and b/rootfs-x86_64.tar.xz differ
+</pre>

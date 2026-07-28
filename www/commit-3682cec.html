@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lin0 3682cec</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}</style>
+<pre>
+<a href=index.html>lin0</a> / <b>commit</b>
+
+<a href=log.html>log</a> | <a href=tree.html>tree</a> | <a href=refs.html>refs</a>
+
+commit 3682cec
+parent <a href=commit-ca083d4.html>ca083d4</a> 
+author myr &lt;myr@terminal.pink&gt;
+date   2026-03-09T17:03:42-03:00
+
+    make.sh fixes
+
+<a href=tree-3682cec.html>tree</a>
+
+<b>diff</b>
+
+diff --git a/make.sh b/make.sh
+index 45903dd..5ebb9c6 100755
+--- a/make.sh
++++ b/make.sh
+@@ -2,10 +2,10 @@
+ 
+ set -e
+ arch="$(uname -m)"
+-platforms="aarch64 x86_64 hpelitedesk pinebookpro rpi3bplus rpi5 m1mac"
++platforms="aarch64 x86_64 hpelitedesk pinebookpro rpi3bplus rpi5 rpi-cm5io m1mac"
+ 
+ muslver="1.2.5"
+-linuxver="6.13.3"
++linuxver="6.19.6"
+ 
+ muslurl="https://musl.libc.org/releases/musl-$muslver.tar.gz"
+ tccurl="https://repo.or.cz/tinycc.git"
+@@ -100,53 +100,19 @@ export CC="$CC -static --no-pie"
+ 	
+ 	# --config-static is needed because it is compiled for musl in another libc
+ 	./configure --prefix=/ \
+-		--sysincludepaths=$outdir/include \
+-		--libpaths=$outdir/lib \
++		--sysincludepaths=/include:/home/lord/lin0/rootfs/include \
++		--libpaths=/lib \
+ 		--tccdir=/lib \
+-		--crtprefix=$outdir/lib \
+-		--elfinterp=$outdir/lib/libc.so \
+-		--config-static \
+-		--config-bcheck=no \
+-		--disable-rpath \
+-		--config-musl
+-	make &amp;&amp; make DESTDIR=$outdir install
+-	cat &lt;&lt;- EOF &gt; $outdir/bin/ar
+-	#!/bin/sh
+-	tcc -ar \$@
+-	EOF
+-	chmod +x $outdir/bin/ar
+-	cd ..
+-	rm -rf tinycc
+-}
+-
+-export CC="$outdir/bin/tcc -static"
+-rm -f ../rootfs/lib/musl-gcc.specs
+-rm -f ../rootfs/bin/musl-gcc
+-
+-[ -d "tinycc" ] || {
+-	echo "building host tcc - pass 2"
+-	git clone "$tccurl"
+-	cd "tinycc"
+-	
+-	#echo "applying patch"
+-	#git apply ../../patches/tcc-*.patch
+-	
+-	./configure --prefix=/ \
+-		--sysincludepaths=$outdir/include:/include \
+-		--libpaths=$outdir/lib:/lib \
+ 		--crtprefix=/lib \
+-		--ar="$outdir/bin/tcc -ar" \
+ 		--elfinterp=/lib/libc.so \
+ 		--config-static \
+ 		--config-bcheck=no \
+ 		--disable-rpath \
+ 		--config-musl
+-
+ 	make &amp;&amp; make DESTDIR=$outdir install
+-	mv $outdir/bin/tcc $outdir/bin/cc
+ 	cat &lt;&lt;- EOF &gt; $outdir/bin/ar
+ 	#!/bin/sh
+-	cc -ar \$@
++	tcc -ar \$@
+ 	EOF
+ 	chmod +x $outdir/bin/ar
+ 	cd ..
+@@ -162,11 +128,11 @@ mkdir -p rootfs/sbin rootfs/etc rootfs/home/root rootfs/dev/pts rootfs/proc root
+ echo ""
+ echo "copying files"
+ echo ""
+-[ -f scripts/make-target.sh ] ||  cp scripts/make-target.sh rootfs/tmp/
+-[ -f scripts/after-boot.sh ] ||  cp scripts/after-boot.sh rootfs/root/
++cp -v scripts/make-target.sh rootfs/tmp/
++cp -v scripts/after-boot.sh rootfs/home/root/
++cp -rv etc rootfs/etc
++cp -v init rootfs/sbin/
+ rm -rf rootfs/tmp/tinycc &amp;&amp; git clone "$tccurl" rootfs/tmp/tinycc
+-cp -r etc rootfs/etc
+-cp init rootfs/sbin/
+ 
+ echo ""
+ echo "running chroot" 
+@@ -178,8 +144,14 @@ echo ""
+ echo "runnning specific platform commands"
+ echo ""
+ postinstall="scripts/post-install-$PLATFORM.sh"
+-[ -f "$postinstall" ] &amp;&amp; . "$postinstall"
+-sudo scripts/umounts.sh
++[ -f "$postinstall" ] &amp;&amp; sh "$postinstall"
++
++echo ""
++echo "cleaning up..."
++echo ""
++rm -f rootfs/lib/musl-gcc.specs
++rm -f rootfs/bin/musl-gcc
++rm -rf rootfs/tmp/*
+ 
+ echo ""
+ echo "compressing rootfs..."
+diff --git a/patches/tcc-0001-added-ld-path-for-build-commands.patch b/patches/tcc-0001-added-ld-path-for-build-commands.patch
+index fb5868f..fe33091 100644
+--- a/patches/tcc-0001-added-ld-path-for-build-commands.patch
++++ b/patches/tcc-0001-added-ld-path-for-build-commands.patch
+@@ -1,45 +1,32 @@
+-From 6ddc45c082ae2ffa560530fc409db5d585b84b96 Mon Sep 17 00:00:00 2001
+-From: myr &lt;myr@terminal.pink&gt;
+-Date: Sat, 5 Oct 2024 23:41:02 -0300
+-Subject: [PATCH] added ld path for build commands
+-
+----
+- Makefile     | 2 +-
+- lib/Makefile | 4 ++--
+- 2 files changed, 3 insertions(+), 3 deletions(-)
+-
+ diff --git a/Makefile b/Makefile
+-index 13260d07..61380142 100644
++index 5ea21183..7410c45b 100644
+ --- a/Makefile
+ +++ b/Makefile
+-@@ -276,7 +276,7 @@ endif
++@@ -279,7 +279,7 @@ endif
+  
+  # convert "include/tccdefs.h" to "tccdefs_.h"
+  %_.h : include/%.h conftest.c
+ -	$S$(CC) -DC2STR $(filter %.c,$^) -o c2str.exe &amp;&amp; ./c2str.exe $&lt; $@
+-+	$S$(CC) -DC2STR $(filter %.c,$^) -o c2str.exe &amp;&amp; ../musl-1.2.5/lib/libc.so ./c2str.exe $&lt; $@
+++	$S$(CC) -DC2STR $(filter %.c,$^) -o c2str.exe &amp;&amp; $$outdir/lib/libc.so ./c2str.exe $&lt; $@
+  
+  # target specific object rule
+  $(X)%.o : %.c $(LIBTCC_INC)
+ diff --git a/lib/Makefile b/lib/Makefile
+-index c95a3e30..88f5bf6f 100644
++index 4727beeb..060eb346 100644
+ --- a/lib/Makefile
+ +++ b/lib/Makefile
+-@@ -8,12 +8,12 @@ VPATH = $(TOPSRC)/lib $(TOPSRC)/win32/lib
+- T = $(or $(CROSS_TARGET),$(NATIVE_TARGET),unknown)
+- X = $(if $(CROSS_TARGET),$(CROSS_TARGET)-)
++@@ -11,12 +11,12 @@ XCFG = $(or $(findstring -win,$T),-unx)
++ S = $(if $(findstring yes,$(SILENT)),@$(info * $@))
+  
++ TCC = $(TOP)/$(X)tcc$(EXESUF)
+ -XTCC ?= $(TOP)/$(X)tcc$(EXESUF)
+-+XTCC ?= LD_LIBRARY_PATH=.. ../../musl-1.2.5/lib/libc.so $(TOP)/$(X)tcc$(EXESUF)
+++XTCC ?= $$outdir/lib/libc.so $(TOP)/$(X)tcc$(EXESUF)
+  XCC = $(XTCC)
+  XAR = $(XTCC) -ar
+  XFLAGS-unx = -B$(TOPSRC)
+  XFLAGS-win = -B$(TOPSRC)/win32 -I$(TOPSRC)/include
+ -XFLAGS = $(XFLAGS$(XCFG)) -I$(TOP)
+-+XFLAGS = $(XFLAGS$(XCFG)) -I$(TOP) -I$(TOP)/../../rootfs/include
+++XFLAGS = $(XFLAGS$(XCFG)) -I$(TOP) -I $$outdir/include
+  BFLAGS = -bt
+- XCFG = $(or $(findstring -win,$T),-unx)
+- S = $(if $(findstring yes,$(SILENT)),@$(info * $@))
+--- 
+-2.46.2
+-
++ 
++ # in order to use gcc, type: make &lt;target&gt;-libtcc1-usegcc=yes
+</pre>

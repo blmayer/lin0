@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lin0 0511dd4</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}</style>
+<pre>
+<a href=index.html>lin0</a> / <b>commit</b>
+
+<a href=log.html>log</a> | <a href=tree.html>tree</a> | <a href=refs.html>refs</a>
+
+commit 0511dd4
+parent <a href=commit-cfb9a3f.html>cfb9a3f</a> 
+author myr &lt;brian@myr.sh&gt;
+date   2024-09-03T11:36:46-03:00
+
+    Added index page
+
+<a href=tree-0511dd4.html>tree</a>
+
+<b>diff</b>
+
+diff --git a/index.html b/index.html
+new file mode 100644
+index 0000000..4782995
+--- /dev/null
++++ b/index.html
+@@ -0,0 +1,55 @@
++&lt;!DOCTYPE html&gt;
++&lt;meta name="viewport" content="width=device-width, initial-scale=1" /&gt;
++&lt;title&gt;b&lt;/title&gt;
++&lt;meta name="color-scheme" content="light dark"&gt;
++&lt;link rel=icon href=data:,&gt;
++&lt;style&gt;pre{width:24em;margin:auto}&lt;/style&gt;
++&lt;pre&gt;
++&lt;i&gt;&lt;b&gt;lin0&lt;/b&gt;&lt;/i&gt;
++
++lin0 (linux zero) is a super minimal source-based
++linux meta-distribution, primarily aimed at power
++users or minimalism enthusiasts. it was born from
++exercises in how minimal a linux system can get.
++
++the distro features a barebones system built from
++scratch:
++
++- the linux kernel, without initrd
++- musl libc
++- mksh (the myr korn shell)
++- tcc (tiny C compiler)
++- the init is a simple shell script
++
++all the rest it optional and can be built from
++this if needed.
++
++
++&lt;i&gt;release notes&lt;/i&gt;
++
++v0.0.1: initial release
++
++
++&lt;i&gt;usage&lt;/i&gt;
++
++after built the system should boot to a login
++prompt, the default user is root and password is
++lin0.
++
++
++&lt;i&gt;installation&lt;/i&gt;
++
++the installation is a 3-step process:
++
++- copy your kernel config to &lt;i&gt;configs/MODEL-linux.config&lt;/i&gt;
++- run ./make.sh, this will build the system
++- copy the generated rootfs to your target system
++
++
++&lt;i&gt;license&lt;/i&gt;
++
++this software is licensed under the BSD 2-clause
++license.
++
++(C) 2023-24 Brian Mayer
++&lt;/pre&gt;
+</pre>

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lin0 fb9c98f</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}</style>
+<pre>
+<a href=index.html>lin0</a> / <b>commit</b>
+
+<a href=log.html>log</a> | <a href=tree.html>tree</a> | <a href=refs.html>refs</a>
+
+commit fb9c98f
+parent <a href=commit-06e2a30.html>06e2a30</a> 
+author myr &lt;myr@terminal.pink&gt;
+date   2024-09-22T11:49:31-03:00
+
+    Added dockerfile
+
+<a href=tree-fb9c98f.html>tree</a>
+
+<b>diff</b>
+
+diff --git a/.dockerignore b/.dockerignore
+new file mode 100644
+index 0000000..378eac2
+--- /dev/null
++++ b/.dockerignore
+@@ -0,0 +1 @@
++build
+diff --git a/Dockerfile b/Dockerfile
+new file mode 100644
+index 0000000..5001dc6
+--- /dev/null
++++ b/Dockerfile
+@@ -0,0 +1,13 @@
++FROM alpine:latest AS builder
++
++ARG BUILDARCH
++
++ADD rootfs-$BUILDARCH.tar.xz .
++
++RUN rm -rf rootfs/share rootfs/sbin rootfs/var
++
++FROM scratch
++
++COPY --from=builder rootfs/ .
++
++ENTRYPOINT ["/bin/sh"]
+</pre>

@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lin0 72e4eaf</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}</style>
+<pre>
+<a href=index.html>lin0</a> / <b>commit</b>
+
+<a href=log.html>log</a> | <a href=tree.html>tree</a> | <a href=refs.html>refs</a>
+
+commit 72e4eaf
+parent <a href=commit-b26aa08.html>b26aa08</a> 
+author Brian Mayer &lt;bleemayer@gmail.com&gt;
+date   2026-07-08T12:46:36-03:00
+
+    Simplify Makefile: drop legacy aliases and dual TLS stack.
+
+    Remove unused platform-name aliases, wolfssl/tiny-curl (BearSSL is the
+    TLS path), and platform-indirection macros. Keep only platforms that have
+    configs, and leave radxa hybrid image logic unchanged.
+
+<a href=tree-72e4eaf.html>tree</a>
+
+<b>diff</b>
+
+diff --git a/Makefile b/Makefile
+index 2853b37..37ff0b2 100644
+--- a/Makefile
++++ b/Makefile
+@@ -11,8 +11,6 @@ MUSLVER    := 1.2.5
+ LINUXVER   := 6.13.3
+ MAKEVER    := 4.4.1
+ MKSHVER    := R59c
+-WOLFSSLVER  := 5.7.6
+-CURLVER     := 8.4.0
+ BEARSSLVER  := 0.6
+ LIBTLS_BEARSSL_MAJOR := 33
+ 
+@@ -22,8 +20,6 @@ TCCURL     := https://repo.or.cz/tinycc.git
+ TOYBOXURL  := https://github.com/landley/toybox.git
+ MKSHURL    := http://www.mirbsd.org/MirOS/dist/mir/mksh/mksh-$(MKSHVER).tgz
+ MAKEURL    := https://ftp.gnu.org/gnu/make/make-$(MAKEVER).tar.gz
+-WOLFSSLURL := https://github.com/wolfSSL/wolfssl/archive/refs/tags/v$(WOLFSSLVER)-stable.tar.gz
+-CURLURL    := https://curl.se/tiny/tiny-curl-$(CURLVER).tar.gz
+ BEARSSLURL := https://bearssl.org/bearssl-$(BEARSSLVER).tar.gz
+ LIBTLS_BEARSSL_URL := https://github.com/michaelforney/libtls-bearssl.git
+ REGDBURL   := https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/plain
+@@ -37,8 +33,9 @@ ROOTFS_LIBTLS := rootfs/lib/libtls.so.$(LIBTLS_BEARSSL_MAJOR)
+ ROOTFS_TLS_LIBS := $(ROOTFS_LIBBEARSSL) $(ROOTFS_LIBTLS)
+ ROOTFS_TLS_HDRS := rootfs/include/tls.h rootfs/include/bearssl.h
+ 
+-PLATFORMS  := aarch64 x86_64 hpelitedesk pinebookpro rpi3bplus rpi5 rpizero radxacm5io
+-AARCH64_PLATS := aarch64 arm64 radxacm5io rpi3bplus rpi5 pinebookpro rpi-cm5io m1mac
++# Platforms that have configs/&lt;name&gt;-{linux,toybox}.config
++PLATFORMS  := x86_64 hpelitedesk pinebookpro rpi3bplus rpi-cm5io m1mac rpizero radxacm5io
++AARCH64_PLATS := radxacm5io rpi3bplus pinebookpro rpi-cm5io m1mac
+ 
+ HOST_ARCH := $(shell uname -m)
+ ifeq ($(HOST_ARCH),arm64)
+@@ -47,15 +44,6 @@ endif
+ HOST_OS := $(shell uname -s)
+ 
+ PLATFORM ?= $(HOST_ARCH)
+-ifeq ($(PLATFORM),arm64)
+-  PLATFORM := aarch64
+-endif
+-ifneq ($(filter $(PLATFORM),radxa radxa-cm5 radxa-cm5-io radxa_cm5 cm5io cm5-io),)
+-  PLATFORM := radxacm5io
+-endif
+-ifneq ($(filter $(PLATFORM),rpi-zero rpi-zero-w rpizero-w rpi0 rpi0w zerow),)
+-  PLATFORM := rpizero
+-endif
+ 
+ export outdir := $(CURDIR)/rootfs
+ export PLATFORM
+@@ -75,8 +63,6 @@ MUSL_LDSONAME := ld-musl-$(MUSL_ARCH).so.1
+ ROOTFS_MUSL_LD := rootfs/lib/$(MUSL_LDSONAME)
+ PLAT_CC := $(CURDIR)/rootfs/bin/musl-gcc
+ 
+-SKIP_CHROOT_radxacm5io := 1
+-POST_TARGET_radxacm5io := radxacm5io-postinstall
+ TOYBOX_CFLAGS := -Os -fPIE -I$(CURDIR)/rootfs/include $(TLS_CFLAGS)
+ TOYBOX_LDFLAGS = -pie -L$(CURDIR)/rootfs/lib -Wl,--gc-sections -Wl,-rpath,/lib \
+ 	-ltls -lbearssl -Wl,-dynamic-linker,/lib/$(MUSL_LDSONAME)
+@@ -88,12 +74,9 @@ ROOTFS_ETC := $(patsubst etc/%,rootfs/etc/%,$(ETC_SRC)) $(ROOTFS_ETC_SSL)
+ 
+ INIT_COMMON := rootfs/bin/toybox $(ROOTFS_MUSL_LD) $(ROOTFS_TLS_LIBS) $(ROOTFS_ETC)
+ INIT_DEPS = rootfs/bin/tcc rootfs/bin/cc $(INIT_COMMON)
+-INIT_DEPS_radxacm5io = rootfs/bin/tcc rootfs/bin/cc rootfs/boot/Image $(INIT_COMMON)
+-init_deps = $(or $(INIT_DEPS_$(PLATFORM)),$(INIT_DEPS))
+-
+-POST_EXTRA = rootfs/lib/libwolfssl.a rootfs/lib/libcurl.so
+-POST_EXTRA_radxacm5io = rootfs/lib/firmware/regulatory.db
+-post_extra = $(or $(POST_EXTRA_$(1)),$(POST_EXTRA))
++ifeq ($(PLATFORM),radxacm5io)
++  INIT_DEPS += rootfs/boot/Image
++endif
+ 
+ # --- copy rules (repo file -&gt; rootfs file) ----------------------------------
+ 
+@@ -117,7 +100,7 @@ rootfs/etc/ssl/cert.pem rootfs/etc/ssl/certs/ca-certificates.crt: build/cacert.p
+ 	rm -f $@
+ 	cp build/cacert.pem $@
+ 
+-rootfs/bin/init: init $(init_deps) | rootfs/home/root
++rootfs/bin/init: init $(INIT_DEPS) | rootfs/home/root
+ 	mkdir -p $(dir $@) rootfs/dev/pts \
+ 		rootfs/proc rootfs/sys rootfs/tmp rootfs/var/run rootfs/run
+ 	chmod 1777 rootfs/tmp
+@@ -151,8 +134,6 @@ endef
+ $(eval $(call fetch_tar,musl-$(MUSLVER)/configure,$(MUSLURL)))
+ $(eval $(call fetch_tar,make-$(MAKEVER)/configure,$(MAKEURL)))
+ $(eval $(call fetch_tar,mksh/Build.sh,$(MKSHURL)))
+-$(eval $(call fetch_tar,wolfssl-$(WOLFSSLVER)/configure,$(WOLFSSLURL)))
+-$(eval $(call fetch_tar,tiny-curl-$(CURLVER)/configure,$(CURLURL)))
+ $(eval $(call fetch_tar,bearssl-$(BEARSSLVER)/Makefile,$(BEARSSLURL)))
+ 
+ build/linux-$(LINUXVER).tar.xz:
+@@ -234,12 +215,14 @@ $(ROOTFS_MUSL_LD) rootfs/bin/ldd rootfs/bin/ld: rootfs/lib/libc.so
+ # (alongside musl; never staged under usr/ or patched after the fact).
+ LINUX_HEADERS = rootfs/include/linux/version.h rootfs/include/linux/types.h
+ BOOT_IMAGE = rootfs/boot/vmlinuz
+-BOOT_IMAGE_rpizero = rootfs/boot/kernel.img
+-BOOT_IMAGE_radxacm5io = rootfs/boot/Image
+-boot_image = $(or $(BOOT_IMAGE_$(PLATFORM)),$(BOOT_IMAGE))
++ifeq ($(PLATFORM),rpizero)
++  BOOT_IMAGE = rootfs/boot/kernel.img
++else ifeq ($(PLATFORM),radxacm5io)
++  BOOT_IMAGE = rootfs/boot/Image
++endif
+ 
+ rootfs/bin/toybox: configs/$(PLATFORM)-toybox.config build/toybox/.git \
+-		rootfs/bin/musl-gcc $(ROOTFS_MUSL_LD) $(LINUX_HEADERS) $(boot_image) \
++		rootfs/bin/musl-gcc $(ROOTFS_MUSL_LD) $(LINUX_HEADERS) $(BOOT_IMAGE) \
+ 		$(ROOTFS_TLS_LIBS) $(ROOTFS_TLS_HDRS)
+ 	@echo "==&gt; toybox ($(PLATFORM))"
+ 	-$(MAKE) -C build/toybox distclean
+@@ -275,7 +258,7 @@ rootfs/bin/sh: rootfs/bin/musl-gcc build/mksh/Build.sh
+ TCC_ELFINTERP := /lib/$(MUSL_LDSONAME)
+ TCC_LDFLAGS := -Wl,-dynamic-linker,$(TCC_ELFINTERP) -L$(CURDIR)/rootfs/lib
+ rootfs/bin/tcc: rootfs/bin/make rootfs/bin/sh build/tinycc/.git \
+-		$(LINUX_HEADERS) $(boot_image) rootfs/bin/musl-gcc $(ROOTFS_MUSL_LD) \
++		$(LINUX_HEADERS) $(BOOT_IMAGE) rootfs/bin/musl-gcc $(ROOTFS_MUSL_LD) \
+ 		rootfs/lib/libc.so
+ 	@echo "==&gt; tcc (dynamic musl; interp $(TCC_ELFINTERP))"
+ 	$(MAKE) -C build/tinycc distclean &gt;/dev/null 2&gt;&amp;1 || true
+@@ -317,19 +300,6 @@ rootfs/bin/ranlib: rootfs/bin/tcc
+ 	printf '%s\n' '#!/bin/sh' 'exec true' &gt; $@
+ 	chmod +x $@
+ 
+-rootfs/lib/libwolfssl.a: rootfs/bin/tcc build/wolfssl-$(WOLFSSLVER)/configure
+-	@echo "==&gt; wolfssl"
+-	cd build/wolfssl-$(WOLFSSLVER) &amp;&amp; ./configure --prefix=$(CURDIR)/rootfs \
+-		--host=x86_64-linux-gnu --target=x86_64-linux-musl --enable-opensslextra
+-	$(MAKE) -C build/wolfssl-$(WOLFSSLVER) &amp;&amp; $(MAKE) -C build/wolfssl-$(WOLFSSLVER) install
+-
+-rootfs/lib/libcurl.so: rootfs/lib/libwolfssl.a build/tiny-curl-$(CURLVER)/configure
+-	@echo "==&gt; tinycurl"
+-	cd build/tiny-curl-$(CURLVER) &amp;&amp; ./configure --prefix=$(CURDIR)/rootfs \
+-		--host=x86_64-linux-gnu --target=x86_64-linux-musl \
+-		--with-wolfssl --disable-libcurl-option --disable-static
+-	$(MAKE) -C build/tiny-curl-$(CURLVER) &amp;&amp; $(MAKE) -C build/tiny-curl-$(CURLVER) install
+-
+ # --- kernel: one recipe family per PLATFORM (single writer for version.h) ---
+ 
+ LIN0_LINUX_PATCHES := $(sort $(wildcard patches/linux-radxacm5io-*.patch))
+@@ -401,7 +371,7 @@ endif
+ # --- skeleton / post-install ------------------------------------------------
+ 
+ .PHONY: skeleton
+-skeleton: rootfs/bin/init rootfs/bin/hotplugd $(init_deps)
++skeleton: rootfs/bin/init rootfs/bin/hotplugd $(INIT_DEPS)
+ 
+ .PHONY: skeleton-chroot
+ skeleton-chroot: skeleton build/tinycc/.git scripts/make-target.sh
+@@ -416,27 +386,25 @@ skeleton-chroot: skeleton build/tinycc/.git scripts/make-target.sh
+ 		|| { sudo scripts/umounts.sh; exit 1; }
+ 	sudo scripts/umounts.sh
+ 
+-# Platforms that run the in-rootfs tcc pass use skeleton-chroot; others use skeleton.
+-SKELETON_radxacm5io = skeleton
+-SKELETON_ = skeleton-chroot
+-skeleton_for = $(or $(SKELETON_$(1)),$(SKELETON_))
++# Host-only bits left after packaging the rootfs.
++define finish_rootfs
++	rm -f rootfs/bin/musl-gcc rootfs/lib/musl-gcc.specs \
++		rootfs/lib/ld-linux-$(MUSL_ARCH).so.1
++	-command -v sudo &gt;/dev/null &amp;&amp; sudo scripts/umounts.sh &gt;/dev/null || true
++endef
+ 
+ define POST_INSTALL_RULE
+ .PHONY: post-install-$(1)
+-post-install-$(1): $$(call skeleton_for,$(1)) $$(call post_extra,$(1)) rootfs-home-pkg
++post-install-$(1): skeleton-chroot rootfs-home-pkg
+ 	@echo "==&gt; post-install ($(1))"
+ 	$(if $(wildcard scripts/post-install-$(1).sh),cd build &amp;&amp; export outdir=$(CURDIR)/rootfs PLATFORM=$(1) linuxver=$(LINUXVER) linux_src=$(CURDIR)/build/linux-$(LINUXVER) &amp;&amp; . $(CURDIR)/scripts/post-install-$(1).sh)
+-	$(if $(POST_TARGET_$(1)),$$(MAKE) $(POST_TARGET_$(1)))
+ 	@$(MAKE) rootfs-home-pkg
+-	rm -f rootfs/bin/musl-gcc rootfs/lib/musl-gcc.specs \
+-		rootfs/lib/ld-linux-$(MUSL_ARCH).so.1
+-	-command -v sudo &gt;/dev/null &amp;&amp; sudo scripts/umounts.sh &gt;/dev/null || true
++	$(finish_rootfs)
+ endef
+-$(foreach p,$(PLATFORMS),$(eval $(call POST_INSTALL_RULE,$(p))))
++$(foreach p,$(filter-out radxacm5io,$(PLATFORMS)),$(eval $(call POST_INSTALL_RULE,$(p))))
+ 
+ # --- platform tarballs ------------------------------------------------------
+ 
+-# Cached arm64 Debian image for macOS builds (no separate Dockerfile).
+ RADXA_BUILDER_PKGS := build-essential gcc g++ make bison flex bc kmod cpio rsync \
+ 	gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
+ 	libncurses-dev libelf-dev dwarves \
+@@ -445,17 +413,6 @@ RADXA_BUILDER_PKGS := build-essential gcc g++ make bison flex bc kmod cpio rsync
+ 	device-tree-compiler u-boot-tools swig libgnutls28-dev \
+ 	dosfstools e2fsprogs fdisk util-linux parted gdisk musl-tools xxd
+ 
+-ifneq ($(HOST_OS),Linux)
+-define run_platform_radxacm5io
+-	@$(MAKE) radxacm5io-builder
+-	docker run --rm --platform linux/arm64 \
+-		-e RADXA_LINUXVER="$(RADXA_LINUXVER)" \
+-		-v "$(CURDIR):/work" -w /work \
+-		"$(RADXA_BUILDER)" \
+-		make PLATFORM=radxacm5io RADXA_LINUXVER="$(RADXA_LINUXVER)" post-install-radxacm5io
+-endef
+-endif
+-
+ define PLAT_RULE
+ .PHONY: $(1)
+ $(1): rootfs-$(1).tar.xz
+@@ -468,7 +425,7 @@ rootfs-$(1).tar.xz: force-platform-$(1) configs/$(1)-linux.config configs/$(1)-t
+ 
+ .PHONY: force-platform-$(1)
+ force-platform-$(1):
+-	$(if $(run_platform_$(1)),$(run_platform_$(1)),@$(MAKE) PLATFORM=$(1) post-install-$(1))
++	@$(MAKE) PLATFORM=$(1) post-install-$(1)
+ 	@$(MAKE) rootfs-home-pkg
+ endef
+ $(foreach p,$(filter-out radxacm5io,$(PLATFORMS)),$(eval $(call PLAT_RULE,$(p))))
+@@ -514,14 +471,15 @@ radxacm5io-bootfiles: rootfs/boot/extlinux/extlinux.conf \
+ 	rootfs/boot/fat-extlinux/extlinux.conf rootfs/boot/lin0.id \
+ 	rootfs/lib/firmware/regulatory.db $(RTL_FW_DST)
+ 
+-.PHONY: radxacm5io-postinstall
+-radxacm5io-postinstall: skeleton radxacm5io-bootfiles rootfs-home-pkg \
++.PHONY: post-install-radxacm5io
++post-install-radxacm5io: skeleton radxacm5io-bootfiles rootfs-home-pkg \
+ 		$(LINUX_HEADERS) rootfs/bin/toybox rootfs/bin/tcc \
+ 		$(ROOTFS_TLS_LIBS) $(ROOTFS_TLS_HDRS)
+-	@echo "==&gt; [radxacm5io] post-install"
++	@echo "==&gt; post-install (radxacm5io)"
+ 	@test -f rootfs/include/tls.h
+ 	@ls -lh rootfs/bin/toybox rootfs/bin/tcc rootfs/bin/hotplugd \
+ 		rootfs/include/tls.h $(ROOTFS_TLS_LIBS)
++	$(finish_rootfs)
+ 
+ # Build the arm64 toolchain image from an inline Dockerfile (Docker layer-caches repeats).
+ .PHONY: radxacm5io-builder
+@@ -540,8 +498,12 @@ radxacm5io-builder:
+ # On macOS/host != Linux, build the whole rootfs inside the aarch64 builder image.
+ .PHONY: radxacm5io-rootfs
+ ifneq ($(HOST_OS),Linux)
+-radxacm5io-rootfs:
+-	$(run_platform_radxacm5io)
++radxacm5io-rootfs: radxacm5io-builder
++	docker run --rm --platform linux/arm64 \
++		-e RADXA_LINUXVER="$(RADXA_LINUXVER)" \
++		-v "$(CURDIR):/work" -w /work \
++		"$(RADXA_BUILDER)" \
++		make PLATFORM=radxacm5io RADXA_LINUXVER="$(RADXA_LINUXVER)" post-install-radxacm5io
+ else
+ radxacm5io-rootfs:
+ 	@$(MAKE) PLATFORM=radxacm5io post-install-radxacm5io
+@@ -603,24 +565,27 @@ radxacm5io: radxacm5io-img
+ 	@ls -lh lin0-radxacm5io.img rootfs-radxacm5io.tar.xz
+ 	@echo "Flash: rkdeveloptool wl 0 lin0-radxacm5io.img"
+ 
+-# --- aliases / meta ---------------------------------------------------------
++# --- meta -------------------------------------------------------------------
+ 
+-.PHONY: all help list clean distclean umount-rootfs mount-rootfs
+-.PHONY: arm64 radxa radxa-cm5 radxa-cm5-io cm5io cm5-io
+-.PHONY: rpi-zero rpi-zero-w rpizero-w rpi0 rpi0w zerow rpizero-img
++.PHONY: all help list clean distclean umount-rootfs mount-rootfs rpizero-img
+ 
+-arm64: aarch64
+-radxa radxa-cm5 radxa-cm5-io cm5io cm5-io: radxacm5io
+-rpi-zero rpi-zero-w rpizero-w rpi0 rpi0w zerow: rpizero
+ rpizero-img: rootfs-rpizero.tar.xz
+ 	scripts/mkimg-rpizero.sh
+ 
++ifeq ($(filter $(PLATFORM),$(PLATFORMS)),)
++all:
++	@echo "Host arch is $(HOST_ARCH); pick an explicit platform:"
++	@echo "  $(PLATFORMS)"
++	@exit 1
++else
+ all: $(PLATFORM)
++endif
+ 
+ help:
+-	@echo "lin0 — literal path targets, pattern copies from etc/ and init."
++	@echo "lin0 — each platform is a Make target."
+ 	@echo "  make &lt;platform&gt;   one of: $(PLATFORMS)"
+ 	@echo "  make radxacm5io   rootfs tarball + hybrid image"
++	@echo "  make rpizero-img  SD image from rootfs-rpizero.tar.xz"
+ 	@echo "  Edit etc/*, init, configs/* — then rebuild."
+ 
+ list:
+</pre>

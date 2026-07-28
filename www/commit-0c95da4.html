@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lin0 0c95da4</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}</style>
+<pre>
+<a href=index.html>lin0</a> / <b>commit</b>
+
+<a href=log.html>log</a> | <a href=tree.html>tree</a> | <a href=refs.html>refs</a>
+
+commit 0c95da4
+parent <a href=commit-012ae9a.html>012ae9a</a> 
+author myr &lt;brian@myr.sh&gt;
+date   2024-09-23T22:01:46-03:00
+
+    index page: small fixes
+
+<a href=tree-0c95da4.html>tree</a>
+
+<b>diff</b>
+
+diff --git a/index.html b/index.html
+index 9e1d508..250d80b 100644
+--- a/index.html
++++ b/index.html
+@@ -57,7 +57,7 @@ there are generic ones, without the linux kernel:
+ - &lt;a href=rootfs-amd64.tar.xz download&gt;rootfs.tar.xz (amd64)&lt;/a&gt;
+ - &lt;a href=rootfs-arm64.tar.xz download&gt;rootfs.tar.xz (arm64)&lt;/a&gt;
+ 
+-and for specific platforms, which include the kernel:
++and for specific platforms, that include the kernel:
+ 
+ - &lt;a href=rootfs-pinebookpro.tar.xz download&gt;rootfs.tar.xz (pinebook pro)&lt;/a&gt;
+ 
+@@ -92,7 +92,7 @@ clone this repo with:
+ the installation is a 3-step process:
+ 
+ - copy your kconfig to &lt;i&gt;configs/MODEL-linux.config&lt;/i&gt;
+-- run PLATFORM=&lt;PLATFORM&gt; ./make.sh, this will
++- run platform=PLATFORM ./make.sh, this will
+   build the root filesystem. see the available
+   platforms in the configs folder
+ - copy the generated rootfs to your target system
+</pre>

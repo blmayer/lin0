@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lin0 c0cd2c3</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}</style>
+<pre>
+<a href=index.html>lin0</a> / <b>commit</b>
+
+<a href=log.html>log</a> | <a href=tree.html>tree</a> | <a href=refs.html>refs</a>
+
+commit c0cd2c3
+parent <a href=commit-2a07fe6.html>2a07fe6</a> 
+author myr &lt;myr@terminal.pink&gt;
+date   2025-05-14T20:14:41-03:00
+
+    added missing libtls to rpi 3 and cm5+io
+
+<a href=tree-c0cd2c3.html>tree</a>
+
+<b>diff</b>
+
+diff --git a/README.md b/README.md
+index 5f4f009..2e5fa99 100644
+--- a/README.md
++++ b/README.md
+@@ -56,6 +56,7 @@ The distro features a barebones system built from scratch:
+ 
+ ### Current Work
+ 
++- ~~~Support RPi Compute Module 5~~~
+ - Adjust kernel build:
+   - Build HP EliteDesk with firmware built-in
+ 
+@@ -68,7 +69,6 @@ The distro features a barebones system built from scratch:
+ - Improve issue file or add a login program like `ly`
+ - Create man pages
+ - Support RPi Zero W
+-- Support RPi Compute Module 5
+ - Add lin0 to `fetch` et al. commands
+ 
+ ---
+@@ -81,20 +81,18 @@ We provide system images in multiple formats so you can get started without buil
+ 
+ ### Tarballs (.tar.xz)
+ 
+-These are **platform-targeted rootfs tarballs** (no kernel):
++These are **architecture-targeted rootfs tarballs** (no kernel):
+ 
+-**v0.0.2**
+ - [`x86_64`](./rootfs-x86_64.tar.xz) (3.3 MB)
+-
+-**v0.0.1**
+ - [`arm64`](./rootfs-arm64.tar.xz) (3.0 MB)
+ 
+ 
+-### Platform-specific (includes kernel)
++And these are Platform-specific and it includes the kernel:
+ 
+ - [`HP EliteDesk 800 G1`](./rootfs-hpelitedesk.tar.xz) (13 MB)
+ - [`Pinebook Pro`](./rootfs-pinebookpro.tar.xz) (13 MB)
+ - [`Raspberry Pi 3B+`](./rootfs-rpi3b+.tar.xz) (26 MB)
++- [`Raspberry Pi CM5 + io board`](./rootfs-rpi-cm5io.tar.xz) (32 MB)
+ 
+ 
+ ### Docker
+diff --git a/www/index.html b/www/index.html
+index e7916d3..7d98435 100644
+--- a/www/index.html
++++ b/www/index.html
+@@ -79,13 +79,7 @@ our tarballs are compressed with xz, thus .tar.xz
+ files, these are targeted at platforms, and do not
+ include the linux kernel:
+ 
+-v0.0.2:
+-
+ - &lt;a href=rootfs-x86_64.tar.xz download&gt;x86_64&lt;/a&gt; [3.3Mb]
+-- &lt;a href=rootfs-rpi5-cm5io.tar.xz download&gt;raspberry pi cm5 + io board&lt;/a&gt; [24Mb]
+-
+-v0.0.1
+-
+ - &lt;a href=rootfs-arm64.tar.xz download&gt;arm64&lt;/a&gt; [3.0Mb]
+ 
+ and for specific platforms, including the kernel:
+@@ -93,6 +87,7 @@ and for specific platforms, including the kernel:
+ - &lt;a href=rootfs-hpelitedesk.tar.xz download&gt;hp elite desk 800 g1&lt;/a&gt; [13Mb]
+ - &lt;a href=rootfs-pinebookpro.tar.xz download&gt;pinebook pro&lt;/a&gt; [13Mb]
+ - &lt;a href=rootfs-rpi3b+.tar.xz download&gt;raspberry pi 3b+&lt;/a&gt; [26Mb]
++- &lt;a href=rootfs-rpi-cm5io.tar.xz download&gt;raspberry pi cm5 + io board&lt;/a&gt; [32Mb]
+ 
+ 
+ &lt;i&gt;docker&lt;/i&gt;
+diff --git a/www/rootfs-rpi5-cm5io.tar.xz b/www/rootfs-rpi-cm5io.tar.xz
+similarity index 79%
+rename from www/rootfs-rpi5-cm5io.tar.xz
+rename to www/rootfs-rpi-cm5io.tar.xz
+index 1628bb4..26a2fe6 100644
+Binary files a/www/rootfs-rpi5-cm5io.tar.xz and b/www/rootfs-rpi-cm5io.tar.xz differ
+</pre>

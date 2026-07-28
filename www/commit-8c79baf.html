@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lin0 8c79baf</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}</style>
+<pre>
+<a href=index.html>lin0</a> / <b>commit</b>
+
+<a href=log.html>log</a> | <a href=tree.html>tree</a> | <a href=refs.html>refs</a>
+
+commit 8c79baf
+parent <a href=commit-0350c10.html>0350c10</a> 
+author myr &lt;myr@terminal.pink&gt;
+date   2025-01-16T13:08:54-03:00
+
+    added wolfssl and tiny-curl packages
+
+<a href=tree-8c79baf.html>tree</a>
+
+<b>diff</b>
+
+diff --git a/make.sh b/make.sh
+index c580eef..0bb9d43 100755
+--- a/make.sh
++++ b/make.sh
+@@ -14,6 +14,7 @@ mkshurl="http://www.mirbsd.org/MirOS/dist/mir/mksh/mksh-R59c.tgz"
+ bashurl="https://ftp.gnu.org/gnu/bash/bash-5.2.37.tar.gz"
+ makeurl="https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz"
+ #bmakeurl="https://www.crufty.net/ftp/pub/sjg/bmake.tar.gz"
++wolfsslurl="https://github.com/wolfSSL/wolfssl/archive/refs/tags/v5.7.6-stable.tar.gz"
+ curlurl="https://curl.se/tiny/tiny-curl-8.4.0.tar.gz"
+ dashurl="http://gondor.apana.org.au/~herbert/dash/files/dash-0.5.12.tar.gz"
+ 
+@@ -65,6 +66,24 @@ export CC="$outdir/bin/musl-gcc"
+ 	cd ..
+ }
+ 
++[ -d "wolfssl-5.7.6" ] || {
++	echo "building wolfssl"
++	curl "$wolfsslurl" | tar xz
++	cd wolfssl-5.7.6/
++	./configure --prefix=$outdir --host=x86_64-linux-gnu --target=x86_64-linux-musl --enable-opensslextra
++	make &amp;&amp; make install
++	cd ..
++}
++
++[ -d "tiny-curl-8.4.0" ] || {
++	echo "building tinycurl"
++	curl "$curlurl" | tar xz
++	cd tiny-curl-8.4.0/
++	./configure --prefix=$outdir --host=x86_64-linux-gnu --target=x86_64-linux-musl --with-wolfssl --disable-libcurl-option --disable-static
++	make &amp;&amp; make install
++	cd ..
++}
++
+ export CC="$CC -static --no-pie" 
+ 
+ [ -d "make-4.4.1" ] || {
+@@ -148,6 +167,7 @@ curl "$muslurl" | tar xz
+ git clone "$toyboxurl"
+ curl "$mkshurl" | tar xz
+ curl "$makeurl" | tar xz
++curl "$wolfsslurl" | tar xz
+ curl "$curlurl" | tar xz
+ curl "$linuxurl" | tar xz
+ cd ../../ # back to lin0 dir
+</pre>

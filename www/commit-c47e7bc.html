@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lin0 c47e7bc</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}</style>
+<pre>
+<a href=index.html>lin0</a> / <b>commit</b>
+
+<a href=log.html>log</a> | <a href=tree.html>tree</a> | <a href=refs.html>refs</a>
+
+commit c47e7bc
+parent <a href=commit-3b062f7.html>3b062f7</a> 
+author myr &lt;myr@terminal.pink&gt;
+date   2024-10-05T16:26:12-03:00
+
+    Revert "tinycc: disabled static libraries"
+
+    This reverts commit 3b062f72ae88cc277d7b89acab5a019e5e29cbd4.
+
+<a href=tree-c47e7bc.html>tree</a>
+
+<b>diff</b>
+
+diff --git a/make.sh b/make.sh
+index 2a6b6b0..e5d236b 100755
+--- a/make.sh
++++ b/make.sh
+@@ -40,7 +40,7 @@ export CC="$(realpath ../rootfs/bin/musl-gcc)"
+ 	echo "building tcc..."
+ 	curl "$tccurl" | tar xj
+ 	cd "tcc-$tccver"
+-	./configure --prefix=/home/lord/git/lin0/rootfs --cc="$CC" --config-musl --elfinterp=/lib/libc.so --sysincludepaths=/include --libpaths=/lib --crtprefix=/lib --disable-static
++	./configure --prefix=/home/lord/git/lin0/rootfs --cc="$CC" --enable-shared-config-musl --elfinterp=/lib/libc.so --sysincludepaths=/include --libpaths=/lib --crtprefix=/lib
+ 	make &amp;&amp; make install
+ 	cat &lt;&lt;- EOF &gt; ../../rootfs/bin/ar
+ 	#!/bin/sh
+diff --git a/rootfs-amd64.tar.xz b/rootfs-amd64.tar.xz
+index 4395719..c3aad1b 100644
+Binary files a/rootfs-amd64.tar.xz and b/rootfs-amd64.tar.xz differ
+</pre>
