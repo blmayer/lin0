@@ -249,6 +249,91 @@ lin0 is a starting point, not a full desktop stack.
 - Man pages
 - Add lin0 to `fetch` and similar tools
 
+## Site pages
+
+The public site is the static files under [`www/`](./www/), served from
+the bare repo at [terminal.pink/lin0](https://terminal.pink/lin0/index.html).
+Hand-write `www/index.html`.
+[captain](https://terminal.pink/captain) fills in `log.html`, `tree.html`,
+`refs.html`, and per-commit pages. It never edits `index.html`.
+
+Only `www/` is exported to the forge. Links that point outside that
+folder (for example `../docs/`) 404 on the site; point at `tree.html`
+or copy the page into `www/`.
+
+### Index style
+
+Match this page (and the other repos on terminal.pink):
+
+- 52-character `<pre>`, magenta links (`#ff00ff`), `color-scheme: light dark`
+- nav line: `log | tree | refs`
+- lowercase running text; do not indent code snippets
+- clone URL with no `.git` suffix: `git clone https://terminal.pink/lin0`
+
+### New repo on terminal.pink
+
+Same layout as this one. Replace `NAME` with the project directory name.
+
+1. Hand-write `www/index.html` as above.
+
+2. Init and commit the tree. Skip build artifacts.
+
+   ```sh
+   git init -b main
+   git add …
+   git commit
+   ```
+
+3. Install captain and generate pages. Generated files describe the
+   commit they were built from, so they lag the tip by one unless you
+   make a follow-up refresh commit (`--no-verify` so the hook does not
+   dirty the tree again).
+
+   ```sh
+   /path/to/captain install   # post-commit hook
+   captain -f
+   git add www
+   git commit --no-verify -m "www: initial captain pages."
+   captain -f
+   git add www
+   git commit --no-verify -m "www: refresh captain pages."
+   ```
+
+4. Create the bare on the Pi and install the forge hooks.
+
+   ```sh
+   ssh pi 'cd ~/terminal.pink && git init --bare NAME'
+   ```
+
+   Copy `~/terminal.pink/captain/hooks/post-receive` to
+   `NAME/hooks/post-receive`. On each push to `main` it walks every
+   new commit, writes `www/*` into the bare root (prefix stripped),
+   and appends `feed.xml`. lin0’s copy of this hook also
+   `git push --mirror` to GitHub; skip that line until a mirror exists.
+
+   Servrian serves the bare directory as static files. Git’s first
+   request is `info/refs?service=git-upload-pack`, which 404s unless
+   that name exists. `post-update` should keep dumb HTTP working:
+
+   ```sh
+   #!/bin/sh
+   git gc
+   git update-server-info
+   ln -sfn refs "info/refs?service=git-upload-pack"
+   ```
+
+5. Push, then list the project on
+   [`s.html`](https://terminal.pink/s.html) in the terminal.pink repo.
+
+   ```sh
+   git remote add origin pi:terminal.pink/NAME
+   git push -u origin main
+   ```
+
+   SSH clone is `pi:terminal.pink/NAME`. HTTPS is
+   `https://terminal.pink/NAME` (no `.git` suffix; shallow clones are
+   not supported over this dumb transport).
+
 ## Help
 
 Mailing list: `lin0 AT terminal DOT pink`
