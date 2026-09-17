@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lin0 5816a2d</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}</style>
+<pre>
+<a href=index.html>lin0</a> / <b>commit</b>
+
+<a href=log.html>log</a> | <a href=tree.html>tree</a> | <a href=refs.html>refs</a>
+
+commit 5816a2d
+parent <a href=commit-2eaebd3.html>2eaebd3</a> 
+author Brian Mayer &lt;bleemayer@gmail.com&gt;
+date   2026-08-05T10:09:40-03:00
+
+    www: do not indent code snippets on the index page.
+
+<a href=tree-5816a2d.html>tree</a>
+
+<b>diff</b>
+
+diff --git a/www/index.html b/www/index.html
+index 4d14006..88aa54e 100644
+--- a/www/index.html
++++ b/www/index.html
+@@ -97,8 +97,8 @@ files. arch-only builds have no kernel; the rest do.
+ sha256 column is a short prefix; full digests
+ live in &lt;a href=SHA256SUMS download&gt;SHA256SUMS&lt;/a&gt;. verify with:
+ 
+-	sha256sum -c SHA256SUMS
+-	# macOS: shasum -a 256 -c SHA256SUMS
++sha256sum -c SHA256SUMS
++# macOS: shasum -a 256 -c SHA256SUMS
+ 
+ 
+ &lt;i&gt;docker&lt;/i&gt;
+@@ -107,7 +107,7 @@ we also provide &lt;a href="//hub.docker.com/r/bleemayer/lin0"&gt;docker images&lt;/a&gt; fo
+ building applications. this image features an easy
+ way to use musl libc and the tcc compiler.
+ 
+-	docker push bleemayer/lin0:latest
++docker push bleemayer/lin0:latest
+ 
+ architectures supported are the same as tarballs.
+ 
+@@ -119,7 +119,7 @@ architectures supported are the same as tarballs.
+ 
+ clone this repo with:
+ 
+-	git clone https://terminal.pink/lin0
++git clone https://terminal.pink/lin0
+ 
+ the installation is a 3-step process:
+ 
+</pre>
