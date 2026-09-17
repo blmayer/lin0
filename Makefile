@@ -7,7 +7,7 @@
 SHELL := /bin/sh
 .SHELLFLAGS := -ec
 
-MUSLVER    := 1.2.5
+MUSLVER    := 1.2.6
 LINUXVER   := 6.13.3
 MAKEVER    := 4.4.1
 MKSHVER    := R59c
@@ -16,6 +16,9 @@ LIBTLS_BEARSSL_MAJOR := 33
 
 MUSLURL    := https://musl.libc.org/releases/musl-$(MUSLVER).tar.gz
 LINUXURL   := https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$(LINUXVER).tar.xz
+# Generic PC/VM kernel tracks current stable (other platforms keep LINUXVER).
+GENERIC_LINUXVER := 7.2.6
+GENERIC_LINUXURL := https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-$(GENERIC_LINUXVER).tar.xz
 TCCURL     := https://repo.or.cz/tinycc.git
 TOYBOXURL  := https://github.com/landley/toybox.git
 MKSHURL    := http://www.mirbsd.org/MirOS/dist/mir/mksh/mksh-$(MKSHVER).tgz
@@ -25,7 +28,7 @@ LIBTLS_BEARSSL_URL := https://github.com/michaelforney/libtls-bearssl.git
 REGDBURL   := https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/plain
 CACERT_URL := https://curl.se/ca/cacert.pem
 # Mozilla CA bundle via curl.se (mk-ca-bundle). Bump with the file.
-CACERT_SHA256 := 86a1f3366afac7c6f8ae9f3c779ac221129328c43f0ab2b8817eb2f362a5025c
+CACERT_SHA256 := f66dff1bdf8f96060b8177976f8b7d9254bc89bc4db933d769f7384d28480bc9
 TLS_CFLAGS := -Os -fPIC -ffunction-sections -fdata-sections \
 	-fno-asynchronous-unwind-tables -fno-unwind-tables
 ROOTFS_LIBBEARSSL := rootfs/lib/libbearssl.so.$(BEARSSLVER)
@@ -34,7 +37,7 @@ ROOTFS_TLS_LIBS := $(ROOTFS_LIBBEARSSL) $(ROOTFS_LIBTLS)
 ROOTFS_TLS_HDRS := rootfs/include/tls.h rootfs/include/bearssl.h
 
 # Platforms that have configs/<name>-{linux,toybox}.config
-PLATFORMS  := x86_64 hpelitedesk pinebookpro rpi3bplus rpi-cm5io m1mac rpizero radxacm5io
+PLATFORMS  := x86_64 generic hpelitedesk pinebookpro rpi3bplus rpi-cm5io m1mac rpizero radxacm5io
 AARCH64_PLATS := radxacm5io rpi3bplus pinebookpro rpi-cm5io m1mac
 
 HOST_ARCH := $(shell uname -m)
@@ -58,7 +61,7 @@ RADXA_ROOT_LABEL := lin0root
 RADXA_ROOT_UUID  := a1ce5ba1-b0fe-43c3-b85c-eca170319b83
 RADXA_CMN        := console=tty0 rootwait rw init=/bin/init
 
-MUSL_ARCH = $(if $(filter $(PLATFORM),$(AARCH64_PLATS)),aarch64,$(if $(filter rpizero,$(PLATFORM)),arm,$(if $(filter hpelitedesk,$(PLATFORM)),x86_64,$(PLATFORM))))
+MUSL_ARCH = $(if $(filter $(PLATFORM),$(AARCH64_PLATS)),aarch64,$(if $(filter rpizero,$(PLATFORM)),arm,$(if $(filter hpelitedesk generic,$(PLATFORM)),x86_64,$(PLATFORM))))
 MUSL_LDSONAME := ld-musl-$(MUSL_ARCH).so.1
 ROOTFS_MUSL_LD := rootfs/lib/$(MUSL_LDSONAME)
 PLAT_CC := $(CURDIR)/rootfs/bin/musl-gcc
@@ -111,8 +114,13 @@ rootfs/bin/hotplugd: hotplugd
 	cp -f $< $@ && chmod +x $@
 
 # Optional drop-ins: pkg/* -> rootfs/home/root/* (pattern rule, no staging).
+# Generic x86_64 ships an empty /home/root.
 PKG_FILES := $(wildcard pkg/*)
+ifeq ($(PLATFORM),x86_64)
+ROOTFS_PKG :=
+else
 ROOTFS_PKG := $(patsubst pkg/%,rootfs/home/root/%,$(PKG_FILES))
+endif
 
 rootfs/home/root/%: pkg/%
 	mkdir -p $(dir $@)
@@ -141,6 +149,13 @@ build/linux-$(LINUXVER).tar.xz:
 	curl -fsSL -o $@ "$(LINUXURL)"
 
 build/linux-$(LINUXVER)/Makefile: build/linux-$(LINUXVER).tar.xz
+	tar xf $< -C build
+
+build/linux-$(GENERIC_LINUXVER).tar.xz:
+	mkdir -p build
+	curl -fsSL -o $@ "$(GENERIC_LINUXURL)"
+
+build/linux-$(GENERIC_LINUXVER)/Makefile: build/linux-$(GENERIC_LINUXVER).tar.xz
 	tar xf $< -C build
 
 define fetch_git
@@ -219,6 +234,9 @@ ifeq ($(PLATFORM),rpizero)
   BOOT_IMAGE = rootfs/boot/kernel.img
 else ifeq ($(PLATFORM),radxacm5io)
   BOOT_IMAGE = rootfs/boot/Image
+else ifeq ($(PLATFORM),x86_64)
+  # Generic arch tarball is userland only (README: arch-only builds have no kernel).
+  BOOT_IMAGE :=
 endif
 
 LIN0_TOYBOX_PATCHES := $(sort $(wildcard patches/toybox-*.patch))
@@ -255,6 +273,7 @@ rootfs/bin/make: rootfs/bin/musl-gcc build/make-$(MAKEVER)/configure
 		--host=x86_64-linux-gnu --target=x86_64-linux-musl
 	$(MAKE) -C build/make-$(MAKEVER)
 	$(MAKE) -C build/make-$(MAKEVER) install
+	$(TOYBOX_STRIP) $@
 
 rootfs/bin/sh: rootfs/bin/musl-gcc build/mksh/Build.sh
 	@echo "==> mksh"
@@ -276,7 +295,7 @@ rootfs/bin/tcc: rootfs/bin/make rootfs/bin/sh build/tinycc/.git \
 		--cc="$(PLAT_CC)" \
 		--extra-ldflags="$(TCC_LDFLAGS)" \
 		--sysincludepaths=/include \
-		--libpaths=/lib \
+		--libpaths='{B}:/lib' \
 		--crtprefix=/lib --tccdir=/lib/tcc \
 		--elfinterp=$(TCC_ELFINTERP) \
 		--config-bcheck=no --disable-rpath --config-musl
@@ -297,6 +316,8 @@ rootfs/bin/tcc: rootfs/bin/make rootfs/bin/sh build/tinycc/.git \
 		echo "error: tcc missing NEEDED libc.so (musl)" >&2; exit 1; }; \
 	chroot $(CURDIR)/rootfs /bin/tcc -vv 2>&1 | grep -q '$(TCC_ELFINTERP)' || { \
 		echo "error: tcc -vv does not report elfinterp $(TCC_ELFINTERP)" >&2; exit 1; }; \
+	chroot $(CURDIR)/rootfs /bin/tcc -vv 2>&1 | grep -q '/lib/tcc/libtcc1.a' || { \
+		echo "error: tcc -vv does not search /lib/tcc/libtcc1.a" >&2; exit 1; }; \
 	echo "tcc ok: interp=$$interp dynamic musl"
 
 rootfs/bin/cc: rootfs/bin/tcc
@@ -365,6 +386,41 @@ rootfs/boot/kernel.img $(LINUX_HEADERS): configs/rpizero-linux.config \
 	-cp -f build/linux-$(LINUXVER)/arch/arm/boot/dts/broadcom/bcm2835-rpi-zero*.dtb rootfs/boot/
 	-cp -f build/linux-$(LINUXVER)/arch/arm/boot/dts/bcm2835-rpi-zero*.dtb rootfs/boot/
 
+else ifeq ($(PLATFORM),x86_64)
+$(LINUX_HEADERS): configs/x86_64-linux.config build/linux-$(LINUXVER)/Makefile
+	@echo "==> linux headers (x86_64 generic)"
+	cp -f configs/x86_64-linux.config build/linux-$(LINUXVER)/.config
+	$(MAKE) -C build/linux-$(LINUXVER) ARCH=x86_64 olddefconfig
+	$(MAKE) -C build/linux-$(LINUXVER) ARCH=x86_64 \
+		INSTALL_HDR_PATH=$(CURDIR)/rootfs headers_install
+
+else ifeq ($(PLATFORM),generic)
+# Common PC/VM kernel: builtin storage/HID/console (no initrd). Cross-compile
+# when the host is not x86_64 so macOS/arm64 builders can use a native gcc.
+GENERIC_KMAKE := ARCH=x86_64
+ifneq ($(HOST_ARCH),x86_64)
+GENERIC_KMAKE += CROSS_COMPILE=x86_64-linux-gnu-
+endif
+rootfs/boot/vmlinuz $(LINUX_HEADERS): configs/generic-linux.config \
+		build/linux-$(GENERIC_LINUXVER)/Makefile
+	@echo "==> linux (generic x86_64 $(GENERIC_LINUXVER))"
+	mkdir -p rootfs/boot
+	cp -f configs/generic-linux.config build/linux-$(GENERIC_LINUXVER)/.config
+	$(MAKE) -C build/linux-$(GENERIC_LINUXVER) $(GENERIC_KMAKE) olddefconfig
+	$(MAKE) -C build/linux-$(GENERIC_LINUXVER) $(GENERIC_KMAKE) -j$$(nproc) bzImage modules
+	$(MAKE) -C build/linux-$(GENERIC_LINUXVER) $(GENERIC_KMAKE) \
+		INSTALL_HDR_PATH=$(CURDIR)/rootfs \
+		INSTALL_PATH=$(CURDIR)/rootfs/boot \
+		INSTALL_MOD_PATH=$(CURDIR)/rootfs \
+		install headers_install modules_install
+	# install(1) writes vmlinuz-<ver>; ship one copy as /boot/vmlinuz.
+	# The EFI stub is the same bzImage — copy it onto the ESP at install time.
+	cp -f rootfs/boot/vmlinuz-$(GENERIC_LINUXVER) rootfs/boot/vmlinuz
+	rm -f rootfs/boot/System.map-$(GENERIC_LINUXVER) rootfs/boot/config-$(GENERIC_LINUXVER) \
+		rootfs/boot/vmlinuz-$(GENERIC_LINUXVER) rootfs/boot/vmlinuz-$(GENERIC_LINUXVER).old \
+		rootfs/boot/vmlinuz.old
+	rm -rf rootfs/boot/efi
+
 else
 rootfs/boot/vmlinuz $(LINUX_HEADERS): configs/$(PLATFORM)-linux.config \
 		rootfs/bin/musl-gcc build/linux-$(LINUXVER)/Makefile
@@ -392,7 +448,8 @@ skeleton-chroot: skeleton build/tinycc/.git scripts/make-target.sh
 	sudo mount -vt devpts devpts -o gid=5,mode=0620 rootfs/dev/pts
 	sudo mount -vt proc proc rootfs/proc
 	sudo mount -vt sysfs sysfs rootfs/sys
-	sudo chroot rootfs /bin/env -i HOME=/home/root PATH=/bin /tmp/make-target.sh \
+	sudo chroot rootfs /bin/env -i HOME=/home/root PATH=/bin \
+		MUSL_LDSONAME=$(MUSL_LDSONAME) /tmp/make-target.sh \
 		|| { sudo scripts/umounts.sh; exit 1; }
 	sudo scripts/umounts.sh
 
@@ -400,6 +457,10 @@ skeleton-chroot: skeleton build/tinycc/.git scripts/make-target.sh
 define finish_rootfs
 	rm -f rootfs/bin/musl-gcc rootfs/lib/musl-gcc.specs \
 		rootfs/lib/ld-linux-$(MUSL_ARCH).so.1
+	rm -rf rootfs/tmp
+	mkdir -p rootfs/tmp
+	chmod 1777 rootfs/tmp
+	$(if $(filter x86_64,$(PLATFORM)),rm -rf rootfs/home/root && mkdir -p rootfs/home/root)
 	-command -v sudo >/dev/null && sudo scripts/umounts.sh >/dev/null || true
 endef
 
@@ -430,15 +491,99 @@ $(1): rootfs-$(1).tar.gz
 rootfs-$(1).tar.gz: force-platform-$(1) configs/$(1)-linux.config configs/$(1)-toybox.config \
 		rootfs/bin/init $(ROOTFS_ETC) rootfs-home-pkg
 	@echo "==> tar rootfs-$(1).tar.gz"
+	rm -rf rootfs/tmp
+	mkdir -p rootfs/tmp
+	chmod 1777 rootfs/tmp
+	$(if $(filter x86_64,$(1)),rm -rf rootfs/home/root && mkdir -p rootfs/home/root)
 	cd rootfs && tar czf $(CURDIR)/rootfs-$(1).tar.gz .
 	@echo "Build complete: rootfs-$(1).tar.gz"
 
 .PHONY: force-platform-$(1)
 force-platform-$(1):
 	@$(MAKE) PLATFORM=$(1) post-install-$(1)
-	@$(MAKE) rootfs-home-pkg
+	$(if $(filter-out x86_64,$(1)),@$(MAKE) PLATFORM=$(1) rootfs-home-pkg)
 endef
-$(foreach p,$(filter-out radxacm5io,$(PLATFORMS)),$(eval $(call PLAT_RULE,$(p))))
+$(foreach p,$(filter-out radxacm5io generic,$(PLATFORMS)),$(eval $(call PLAT_RULE,$(p))))
+
+# --- generic x86_64 (userland + kernel for PCs and VMs) ---------------------
+#
+# Linux x86_64: native `make generic`.
+# macOS / other: kernel is cross-built in an arm64 container (case-sensitive
+# volume for the kernel tree); userland is reused from rootfs-x86_64.tar.gz
+# or rebuilt in linux/amd64.
+
+GENERIC_BUILDER := lin0-generic-kbuilder:latest
+GENERIC_KVOL    := lin0-linux-$(GENERIC_LINUXVER)
+
+.PHONY: generic force-platform-generic generic-builder generic-via-docker generic-assemble
+
+force-platform-generic:
+	@$(MAKE) PLATFORM=generic post-install-generic
+
+rootfs-generic.tar.gz: force-platform-generic configs/generic-linux.config \
+		configs/generic-toybox.config rootfs/bin/init $(ROOTFS_ETC) rootfs-home-pkg
+	@echo "==> tar rootfs-generic.tar.gz"
+	rm -rf rootfs/tmp
+	mkdir -p rootfs/tmp
+	chmod 1777 rootfs/tmp
+	cd rootfs && tar czf $(CURDIR)/rootfs-generic.tar.gz .
+	@echo "Build complete: rootfs-generic.tar.gz"
+
+ifeq ($(HOST_OS),Linux)
+generic: rootfs-generic.tar.gz
+else
+generic:
+	$(MAKE) generic-via-docker
+endif
+
+generic-builder:
+	@printf '%s\n' \
+		'FROM debian:bookworm-slim' \
+		'ENV DEBIAN_FRONTEND=noninteractive' \
+		'RUN apt-get update && apt-get install -y --no-install-recommends \' \
+		' build-essential make bison flex bc python3 rsync kmod \' \
+		' gcc-x86-64-linux-gnu binutils-x86-64-linux-gnu \' \
+		' libelf-dev libssl-dev ca-certificates xz-utils \' \
+		' && rm -rf /var/lib/apt/lists/*' \
+		'WORKDIR /src' \
+	| docker build --platform linux/arm64 -t "$(GENERIC_BUILDER)" -
+
+generic-via-docker: generic-builder
+	@echo "==> generic via docker (kernel cross + assemble)"
+	docker volume create $(GENERIC_KVOL) >/dev/null
+	docker run --rm --platform linux/arm64 \
+		-v "$(CURDIR):/src" \
+		-v "$(GENERIC_KVOL):/src/build/linux-$(GENERIC_LINUXVER)" \
+		"$(GENERIC_BUILDER)" \
+		make PLATFORM=generic HOST_ARCH=aarch64 rootfs/boot/vmlinuz
+	$(MAKE) generic-assemble
+
+# Wrap the published x86_64 userland with the newly built kernel, modules, EFI.
+generic-assemble:
+	@echo "==> assemble rootfs-generic.tar.gz"
+	@test -f rootfs/boot/vmlinuz || { echo "missing rootfs/boot/vmlinuz" >&2; exit 1; }
+	@TAR=; \
+	if [ -f www/rootfs-x86_64.tar.gz ]; then TAR=www/rootfs-x86_64.tar.gz; \
+	elif [ -f rootfs-x86_64.tar.gz ]; then TAR=rootfs-x86_64.tar.gz; fi; \
+	if [ -n "$$TAR" ]; then \
+		tmp=$$(mktemp -d); \
+		tar xzf "$$TAR" -C "$$tmp"; \
+		mkdir -p "$$tmp/boot" "$$tmp/lib"; \
+		cp -f rootfs/boot/vmlinuz "$$tmp/boot/vmlinuz"; \
+		if [ -d rootfs/lib/modules ]; then \
+			rm -rf "$$tmp/lib/modules"; \
+			cp -a rootfs/lib/modules "$$tmp/lib/"; \
+			rm -f "$$tmp"/lib/modules/*/build "$$tmp"/lib/modules/*/source; \
+		fi; \
+		cp -f init "$$tmp/bin/init" && chmod +x "$$tmp/bin/init"; \
+		rm -rf "$$tmp/tmp" && mkdir -p "$$tmp/tmp" "$$tmp/home/root"; \
+		chmod 1777 "$$tmp/tmp"; \
+		tar czf rootfs-generic.tar.gz -C "$$tmp" .; \
+		rm -rf "$$tmp"; \
+	else \
+		$(MAKE) PLATFORM=generic rootfs-generic.tar.gz; \
+	fi
+	@ls -lh rootfs-generic.tar.gz
 
 # --- radxa boot files + image -----------------------------------------------
 
@@ -594,6 +739,7 @@ endif
 help:
 	@echo "lin0 — each platform is a Make target."
 	@echo "  make <platform>   one of: $(PLATFORMS)"
+	@echo "  make generic      x86_64 userland + current PC/VM kernel (tarball)"
 	@echo "  make radxacm5io   rootfs tarball + hybrid image"
 	@echo "  make rpizero-img  SD image from rootfs-rpizero.tar.gz"
 	@echo "  Edit etc/*, init, configs/* — then rebuild."

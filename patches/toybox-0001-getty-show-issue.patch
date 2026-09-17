@@ -1,0 +1,45 @@
+diff --git a/toys/pending/getty.c b/toys/pending/getty.c
+index 1bd795d..aeb000e 100644
+--- a/toys/pending/getty.c
++++ b/toys/pending/getty.c
+@@ -5,13 +5,14 @@
+  *
+  * No Standard.
+ 
+-USE_GETTY(NEWTOY(getty, "<2t#<0H:I:l:f:iwnmLh", TOYFLAG_SBIN))
++USE_GETTY(NEWTOY(getty, "(show-issue)t#<0H:I:l:f:iwnmLh", TOYFLAG_SBIN))
+ 
+ config GETTY
+   bool "getty"
+   default n
+   help
+     usage: getty [OPTIONS] BAUD_RATE[,BAUD_RATE]... TTY [TERMTYPE]
++           getty --show-issue [-f ISSUE_FILE]
+ 
+     Wait for a modem to dial into serial port, adjust baud rate, call login.
+ 
+@@ -22,6 +23,7 @@ config GETTY
+     -w    Wait for CR or LF before sending /etc/issue
+     -i    Don't display /etc/issue
+     -f ISSUE_FILE  Display ISSUE_FILE instead of /etc/issue
++    --show-issue  Display issue file and exit (no login)
+     -l LOGIN  Invoke LOGIN instead of /bin/login
+     -t SEC    Terminate after SEC if no login name is read
+     -I INITSTR  Send INITSTR before anything else
+@@ -213,6 +215,16 @@ void getty_main(void)
+   if (!FLAG(f)) TT.f = "/etc/issue";
+   uname(&TT.uts);
+ 
++  if (FLAG(show_issue)) {
++    TT.tty_name = ttyname(0);
++    if (!TT.tty_name) TT.tty_name = "unknown";
++    print_issue();
++    fflush(stdout);
++    return;
++  }
++
++  if (toys.optc < 2) help_exit("BAUD_RATE TTY");
++
+   // parse arguments and set $TERM
+   if (isdigit(**toys.optargs)) {
+     parse_speeds(*toys.optargs);

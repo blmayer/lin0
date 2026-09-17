@@ -40,6 +40,10 @@ modprobe rfkill
 modprobe rtl8xxxu
 
 clear
+# VGA/HDMI on tty0; PC UART when the kernel created ttyS0.
+if [ -c /dev/ttyS0 ]; then
+	getty 115200 ttyS0 vt220 &
+fi
 while true; do
 	getty 115200 tty0 linux
 done

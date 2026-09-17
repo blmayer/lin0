@@ -43,6 +43,7 @@ Each platform is a Make target. Outputs are `rootfs-<platform>.tar.gz`
 
 ```sh
 make x86_64
+make generic        # x86_64 userland + PC/VM kernel
 make pinebookpro
 make rpizero       # also: make rpizero-img
 make radxacm5io    # rootfs tarball + hybrid disk image
@@ -72,7 +73,8 @@ have no kernel; the rest do. Raspberry Pi Zero is build-only (not published).
 +----------------------+------+------------------+------------------+
 | platform             | size | sha256           | build            |
 +----------------------+------+------------------+------------------+
-| x86_64               | 4.6M | d9b0345efba6d227 | make x86_64      |
+| x86_64               | 4.7M | ad3d52203ff36ac3 | make x86_64      |
+| generic x86_64       |  19M | 336be7abb70930ab | make generic     |
 | arm64                | 3.9M | a4f99c89fb6b2d97 | make arm64       |
 | hp elite desk 800 g1 |  14M | 73752c23c40d1fdd | make hpelitedesk |
 | pinebook pro         |  14M | 3e49689772dc0235 | make pinebookpro |
@@ -103,8 +105,61 @@ tar -xf rootfs-ARCH.tar.gz -C /mnt/your-root
 cp path/to/kernel /mnt/your-root/boot/   # if the tarball has no kernel
 ```
 
-Replace `ARCH` with `x86_64`, `arm64`, or a platform name. Kernel name is
-platform-specific (`bzImage`, `Image`, `zImage`, …).
+Replace `ARCH` with `x86_64`, `arm64`, `generic`, or a platform name. Kernel
+name is platform-specific (`vmlinuz`, `Image`, `zImage`, …).
+
+### Generic x86_64 (kernel + userland)
+
+`make generic` builds the same musl/tcc userland as `x86_64` plus the current
+stable kernel (7.2.6) with the usual PC and VM drivers built in (no initrd):
+AHCI, NVMe, virtio, USB HID/storage, EFI stub, VGA/simpledrm, e1000/e1000e/r8169.
+
+The tarball includes one kernel, `/boot/vmlinuz` (EFI-stub bzImage). There is
+no disk image; partition a disk, extract the tarball, then copy that file onto
+the ESP as `\EFI\BOOT\BOOTX64.EFI`.
+
+Default kernel cmdline (EFI stub, overridable by the bootloader):
+
+```
+root=PARTLABEL=lin0root rootfstype=ext4 rw console=tty0 console=ttyS0,115200 init=/bin/init
+```
+
+Install on a disk (`/dev/sdX` — check `lsblk` first):
+
+```sh
+# GPT: 64MiB EFI System partition + the rest as Linux root
+sgdisk --zap-all /dev/sdX
+sgdisk --new=1:2048:+64M --typecode=1:ef00 --change-name=1:EFI \
+       --new=2:0:0       --typecode=2:8300 --change-name=2:lin0root \
+       /dev/sdX
+
+mkfs.vfat -F 32 -n EFI /dev/sdX1
+mkfs.ext4 -L lin0root /dev/sdX2
+
+mount /dev/sdX2 /mnt
+tar -xf rootfs-generic.tar.gz -C /mnt
+mkdir -p /mnt/boot/efi
+mount /dev/sdX1 /mnt/boot/efi
+mkdir -p /mnt/boot/efi/EFI/BOOT
+cp /mnt/boot/vmlinuz /mnt/boot/efi/EFI/BOOT/BOOTX64.EFI
+umount /mnt/boot/efi /mnt
+```
+
+NVMe disks are `/dev/nvme0n1` with partitions `p1`/`p2` (`/dev/nvme0n1p1`).
+The GPT name `lin0root` is what `root=PARTLABEL=lin0root` matches.
+
+Firmware should boot `\EFI\BOOT\BOOTX64.EFI` from the ESP (removable-media
+path). For QEMU with SeaBIOS, load the kernel yourself:
+
+```sh
+qemu-system-x86_64 -machine q35 -m 512 \
+  -kernel /mnt/boot/vmlinuz \
+  -drive file=/dev/sdX,format=raw,if=virtio \
+  -append 'root=PARTLABEL=lin0root rootfstype=ext4 rw console=ttyS0,115200 init=/bin/init' \
+  -nographic
+```
+
+On macOS, `make generic` cross-builds the kernel in Docker.
 
 Files under `pkg/` are copied to `/home/root/` on the target when present.
 
