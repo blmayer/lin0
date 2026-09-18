@@ -35,19 +35,27 @@ e|` `    /\- ,\    e|'  '\`      minimal a linux system
 git clone https://terminal.pink/lin0
 cd lin0
 make help          # list platforms
-make               # build for the host architecture
 ```
 
-Each platform is a Make target. Outputs are `rootfs-<platform>.tar.gz`
-(and a full disk image for some boards).
+Each platform is a Make target. Most write `rootfs-<platform>.tar.gz`.
+`make x86_64-generic` writes `rootfs-x86_64-generic.tar.gz`. Radxa also writes a
+hybrid disk image; `make rpizero-img` builds an SD image from the zero
+tarball.
 
 ```sh
-make x86_64
-make generic        # x86_64 userland + PC/VM kernel
+make x86_64        # userland only (no kernel)
+make x86_64-generic       # that userland + Linux 7.2.6 for PCs/VMs
 make pinebookpro
 make rpizero       # also: make rpizero-img
 make radxacm5io    # rootfs tarball + hybrid disk image
 ```
+
+Bare `make` builds the host architecture when that name is a platform
+(for example `x86_64` on an x86_64 Linux box). On Apple Silicon it prints
+the platform list and exits.
+
+On macOS, `make x86_64-generic` and `make radxacm5io` run the compile in Docker.
+Other platforms expect a Linux host (they chroot into the new rootfs).
 
 Edit `configs/<platform>-*.config`, `etc/*`, or `init`, then rebuild — Make
 only rebuilds what changed.
@@ -74,7 +82,7 @@ have no kernel; the rest do. Raspberry Pi Zero is build-only (not published).
 | platform             | size | sha256           | build            |
 +----------------------+------+------------------+------------------+
 | x86_64               | 4.7M | ad3d52203ff36ac3 | make x86_64      |
-| generic x86_64       |  19M | 336be7abb70930ab | make generic     |
+| x86_64-generic       |  19M | 336be7abb70930ab | make x86_64-generic     |
 | arm64                | 3.9M | a4f99c89fb6b2d97 | make arm64       |
 | hp elite desk 800 g1 |  14M | 73752c23c40d1fdd | make hpelitedesk |
 | pinebook pro         |  14M | 3e49689772dc0235 | make pinebookpro |
@@ -105,12 +113,12 @@ tar -xf rootfs-ARCH.tar.gz -C /mnt/your-root
 cp path/to/kernel /mnt/your-root/boot/   # if the tarball has no kernel
 ```
 
-Replace `ARCH` with `x86_64`, `arm64`, `generic`, or a platform name. Kernel
-name is platform-specific (`vmlinuz`, `Image`, `zImage`, …).
+Replace `ARCH` with `x86_64`, `x86_64-generic`, `arm64`, or a platform
+name. Kernel name is platform-specific (`vmlinuz`, `Image`, `zImage`, …).
 
-### Generic x86_64 (kernel + userland)
+### x86_64-generic (kernel + userland)
 
-`make generic` builds the same musl/tcc userland as `x86_64` plus the current
+`make x86_64-generic` builds the same musl/tcc userland as `x86_64` plus the current
 stable kernel (7.2.6) with the usual PC and VM drivers built in (no initrd):
 AHCI, NVMe, virtio, USB HID/storage, EFI stub, VGA/simpledrm, e1000/e1000e/r8169.
 
@@ -137,7 +145,7 @@ mkfs.vfat -F 32 -n EFI /dev/sdX1
 mkfs.ext4 -L lin0root /dev/sdX2
 
 mount /dev/sdX2 /mnt
-tar -xf rootfs-generic.tar.gz -C /mnt
+tar -xf rootfs-x86_64-generic.tar.gz -C /mnt
 mkdir -p /mnt/boot/efi
 mount /dev/sdX1 /mnt/boot/efi
 mkdir -p /mnt/boot/efi/EFI/BOOT
@@ -159,9 +167,7 @@ qemu-system-x86_64 -machine q35 -m 512 \
   -nographic
 ```
 
-On macOS, `make generic` cross-builds the kernel in Docker.
-
-Files under `pkg/` are copied to `/home/root/` on the target when present.
+On macOS, `make x86_64-generic` cross-builds the kernel in Docker.
 
 ## Radxa CM5 + IO (mainline)
 
@@ -222,30 +228,36 @@ find the rootfs.
 
 ## Build from source
 
-1. Add or edit kernel/toybox configs:
+The tree is one Makefile. It fetches musl 1.2.6, TinyCC, toybox, mksh,
+GNU make, BearSSL, and libtls-bearssl, then chroots into the new rootfs
+to self-host tcc. Most platforms also build a kernel (no initrd). Generic
+uses Linux 7.2.6; the others use 6.13.3. Radxa follows Linus’s tree
+(`RADXA_LINUXVER`, default `master`).
 
-   ```text
-   configs/MODEL-linux.config
-   configs/MODEL-toybox.config
-   ```
+Need a C toolchain on the host (`gcc`, `make`, `bison`, `flex`, `bc`).
+The chroot step needs Linux. On macOS only `x86_64-generic` and `radxacm5io`
+are wired through Docker.
 
-2. Build:
+```sh
+git clone https://terminal.pink/lin0
+cd lin0
+make help
+make x86_64          # userland tarball, kernel headers only
+make x86_64-generic         # userland + PC/VM kernel -> rootfs-x86_64-generic.tar.gz
+make pinebookpro
+make radxacm5io      # tarball + lin0-radxacm5io.img
+```
 
-   ```sh
-   make help
-   make x86_64
-   make pinebookpro
-   make radxacm5io
-   make              # host architecture
-   ```
+Configs: `configs/<platform>-linux.config` and
+`configs/<platform>-toybox.config`. Static files: `etc/`. Optional
+`pkg/*` is copied to `/home/root` except on `x86_64` (that tarball ships
+an empty home). TLS trust anchors come from
+[curl.se/ca/cacert.pem](https://curl.se/ca/cacert.pem) at build time
+(SHA-256 pinned as `CACERT_SHA256`). `wget` links against BearSSL +
+libtls and loads `/etc/ssl/cert.pem`.
 
-3. Install the resulting `rootfs-*.tar.gz` (or disk image) on the target.
-
-Static system config lives in `etc/` (generic only). TLS trust anchors are
-fetched at build time from [curl.se/ca/cacert.pem](https://curl.se/ca/cacert.pem)
-into `rootfs/etc/ssl/` (SHA-256 pinned as `CACERT_SHA256` in the Makefile).
-`wget` links against BearSSL + libtls-bearssl and loads `/etc/ssl/cert.pem` by
-default.
+`make clean` removes `rootfs/` and tarballs. `make distclean` also
+removes `build/`.
 
 ## Usage
 

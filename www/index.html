@@ -86,7 +86,7 @@ files. arch-only builds have no kernel; the rest do.
 | platform             | size | sha256           |
 +----------------------+------+------------------+
 | <a href=rootfs-x86_64.tar.gz download>x86_64</a>               | 4.7M | ad3d52203ff36ac3 |
-| <a href=rootfs-generic.tar.gz download>generic x86_64</a>       |  19M | 336be7abb70930ab |
+| <a href=rootfs-x86_64-generic.tar.gz download>x86_64-generic</a> |  19M | 336be7abb70930ab |
 | <a href=rootfs-arm64.tar.gz download>arm64</a>                | 3.9M | a4f99c89fb6b2d97 |
 | <a href=rootfs-hpelitedesk.tar.gz download>hp elite desk 800 g1</a> |  14M | 73752c23c40d1fdd |
 | <a href=rootfs-pinebookpro.tar.gz download>pinebook pro</a>         |  14M | 3e49689772dc0235 |
@@ -108,7 +108,7 @@ we also provide <a href="//hub.docker.com/r/bleemayer/lin0">docker images</a> fo
 building applications. this image features an easy
 way to use musl libc and the tcc compiler.
 
-docker push bleemayer/lin0:latest
+docker pull bleemayer/lin0:latest
 
 architectures supported are the same as tarballs.
 
@@ -122,16 +122,25 @@ clone this repo with:
 
 git clone https://terminal.pink/lin0
 
-the installation is a 3-step process:
+each platform is a make target:
 
-- copy your kconfig to <i>configs/MODEL-linux.config</i>
-- run platform=PLATFORM ./make.sh, this will
-  build the root filesystem. see the available
-  platforms in the configs folder
-- copy the generated rootfs to your target system
+make help
+make x86_64
+make x86_64-generic
+make radxacm5io
 
-the installer will copy any extra packages present
-at the pkg folder to your /home/root/ folder.
+on macos, x86_64-generic and radxacm5io
+run inside docker. other platforms want
+a linux host (they chroot the new rootfs).
+
+configs live in configs/, static files
+in etc/. output is rootfs-&lt;platform&gt;.tar.gz
+(x86_64-generic writes
+rootfs-x86_64-generic.tar.gz).
+
+edit configs, etc, or init, then
+rebuild. make only rebuilds what
+changed.
 
 
 <i>from tarball</i>

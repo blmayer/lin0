@@ -37,7 +37,7 @@ ROOTFS_TLS_LIBS := $(ROOTFS_LIBBEARSSL) $(ROOTFS_LIBTLS)
 ROOTFS_TLS_HDRS := rootfs/include/tls.h rootfs/include/bearssl.h
 
 # Platforms that have configs/<name>-{linux,toybox}.config
-PLATFORMS  := x86_64 generic hpelitedesk pinebookpro rpi3bplus rpi-cm5io m1mac rpizero radxacm5io
+PLATFORMS  := x86_64 x86_64-generic hpelitedesk pinebookpro rpi3bplus rpi-cm5io m1mac rpizero radxacm5io
 AARCH64_PLATS := radxacm5io rpi3bplus pinebookpro rpi-cm5io m1mac
 
 HOST_ARCH := $(shell uname -m)
@@ -61,7 +61,7 @@ RADXA_ROOT_LABEL := lin0root
 RADXA_ROOT_UUID  := a1ce5ba1-b0fe-43c3-b85c-eca170319b83
 RADXA_CMN        := console=tty0 rootwait rw init=/bin/init
 
-MUSL_ARCH = $(if $(filter $(PLATFORM),$(AARCH64_PLATS)),aarch64,$(if $(filter rpizero,$(PLATFORM)),arm,$(if $(filter hpelitedesk generic,$(PLATFORM)),x86_64,$(PLATFORM))))
+MUSL_ARCH = $(if $(filter $(PLATFORM),$(AARCH64_PLATS)),aarch64,$(if $(filter rpizero,$(PLATFORM)),arm,$(if $(filter hpelitedesk x86_64-generic,$(PLATFORM)),x86_64,$(PLATFORM))))
 MUSL_LDSONAME := ld-musl-$(MUSL_ARCH).so.1
 ROOTFS_MUSL_LD := rootfs/lib/$(MUSL_LDSONAME)
 PLAT_CC := $(CURDIR)/rootfs/bin/musl-gcc
@@ -388,24 +388,24 @@ rootfs/boot/kernel.img $(LINUX_HEADERS): configs/rpizero-linux.config \
 
 else ifeq ($(PLATFORM),x86_64)
 $(LINUX_HEADERS): configs/x86_64-linux.config build/linux-$(LINUXVER)/Makefile
-	@echo "==> linux headers (x86_64 generic)"
+	@echo "==> linux headers (x86_64)"
 	cp -f configs/x86_64-linux.config build/linux-$(LINUXVER)/.config
 	$(MAKE) -C build/linux-$(LINUXVER) ARCH=x86_64 olddefconfig
 	$(MAKE) -C build/linux-$(LINUXVER) ARCH=x86_64 \
 		INSTALL_HDR_PATH=$(CURDIR)/rootfs headers_install
 
-else ifeq ($(PLATFORM),generic)
+else ifeq ($(PLATFORM),x86_64-generic)
 # Common PC/VM kernel: builtin storage/HID/console (no initrd). Cross-compile
 # when the host is not x86_64 so macOS/arm64 builders can use a native gcc.
 GENERIC_KMAKE := ARCH=x86_64
 ifneq ($(HOST_ARCH),x86_64)
 GENERIC_KMAKE += CROSS_COMPILE=x86_64-linux-gnu-
 endif
-rootfs/boot/vmlinuz $(LINUX_HEADERS): configs/generic-linux.config \
+rootfs/boot/vmlinuz $(LINUX_HEADERS): configs/x86_64-generic-linux.config \
 		build/linux-$(GENERIC_LINUXVER)/Makefile
-	@echo "==> linux (generic x86_64 $(GENERIC_LINUXVER))"
+	@echo "==> linux (x86_64-generic $(GENERIC_LINUXVER))"
 	mkdir -p rootfs/boot
-	cp -f configs/generic-linux.config build/linux-$(GENERIC_LINUXVER)/.config
+	cp -f configs/x86_64-generic-linux.config build/linux-$(GENERIC_LINUXVER)/.config
 	$(MAKE) -C build/linux-$(GENERIC_LINUXVER) $(GENERIC_KMAKE) olddefconfig
 	$(MAKE) -C build/linux-$(GENERIC_LINUXVER) $(GENERIC_KMAKE) -j$$(nproc) bzImage modules
 	$(MAKE) -C build/linux-$(GENERIC_LINUXVER) $(GENERIC_KMAKE) \
@@ -503,36 +503,37 @@ force-platform-$(1):
 	@$(MAKE) PLATFORM=$(1) post-install-$(1)
 	$(if $(filter-out x86_64,$(1)),@$(MAKE) PLATFORM=$(1) rootfs-home-pkg)
 endef
-$(foreach p,$(filter-out radxacm5io generic,$(PLATFORMS)),$(eval $(call PLAT_RULE,$(p))))
+$(foreach p,$(filter-out radxacm5io x86_64-generic,$(PLATFORMS)),$(eval $(call PLAT_RULE,$(p))))
 
-# --- generic x86_64 (userland + kernel for PCs and VMs) ---------------------
+# --- x86_64-generic (userland + kernel for PCs and VMs) ---------------------
 #
-# Linux x86_64: native `make generic`.
+# Linux x86_64: native `make x86_64-generic`.
 # macOS / other: kernel is cross-built in an arm64 container (case-sensitive
 # volume for the kernel tree); userland is reused from rootfs-x86_64.tar.gz
 # or rebuilt in linux/amd64.
 
-GENERIC_BUILDER := lin0-generic-kbuilder:latest
+GENERIC_BUILDER := lin0-x86_64-generic-builder:latest
 GENERIC_KVOL    := lin0-linux-$(GENERIC_LINUXVER)
+GENERIC_TAR     := rootfs-x86_64-generic.tar.gz
 
-.PHONY: generic force-platform-generic generic-builder generic-via-docker generic-assemble
+.PHONY: x86_64-generic force-platform-x86_64-generic generic-builder generic-via-docker generic-assemble
 
-force-platform-generic:
-	@$(MAKE) PLATFORM=generic post-install-generic
+force-platform-x86_64-generic:
+	@$(MAKE) PLATFORM=x86_64-generic post-install-x86_64-generic
 
-rootfs-generic.tar.gz: force-platform-generic configs/generic-linux.config \
-		configs/generic-toybox.config rootfs/bin/init $(ROOTFS_ETC) rootfs-home-pkg
-	@echo "==> tar rootfs-generic.tar.gz"
+$(GENERIC_TAR): force-platform-x86_64-generic configs/x86_64-generic-linux.config \
+		configs/x86_64-generic-toybox.config rootfs/bin/init $(ROOTFS_ETC) rootfs-home-pkg
+	@echo "==> tar $(GENERIC_TAR)"
 	rm -rf rootfs/tmp
 	mkdir -p rootfs/tmp
 	chmod 1777 rootfs/tmp
-	cd rootfs && tar czf $(CURDIR)/rootfs-generic.tar.gz .
-	@echo "Build complete: rootfs-generic.tar.gz"
+	cd rootfs && tar czf $(CURDIR)/$(GENERIC_TAR) .
+	@echo "Build complete: $(GENERIC_TAR)"
 
 ifeq ($(HOST_OS),Linux)
-generic: rootfs-generic.tar.gz
+x86_64-generic: $(GENERIC_TAR)
 else
-generic:
+x86_64-generic:
 	$(MAKE) generic-via-docker
 endif
 
@@ -549,18 +550,18 @@ generic-builder:
 	| docker build --platform linux/arm64 -t "$(GENERIC_BUILDER)" -
 
 generic-via-docker: generic-builder
-	@echo "==> generic via docker (kernel cross + assemble)"
+	@echo "==> x86_64-generic via docker (kernel cross + assemble)"
 	docker volume create $(GENERIC_KVOL) >/dev/null
 	docker run --rm --platform linux/arm64 \
 		-v "$(CURDIR):/src" \
 		-v "$(GENERIC_KVOL):/src/build/linux-$(GENERIC_LINUXVER)" \
 		"$(GENERIC_BUILDER)" \
-		make PLATFORM=generic HOST_ARCH=aarch64 rootfs/boot/vmlinuz
+		make PLATFORM=x86_64-generic HOST_ARCH=aarch64 rootfs/boot/vmlinuz
 	$(MAKE) generic-assemble
 
-# Wrap the published x86_64 userland with the newly built kernel, modules, EFI.
+# Wrap the published x86_64 userland with the newly built kernel + modules.
 generic-assemble:
-	@echo "==> assemble rootfs-generic.tar.gz"
+	@echo "==> assemble $(GENERIC_TAR)"
 	@test -f rootfs/boot/vmlinuz || { echo "missing rootfs/boot/vmlinuz" >&2; exit 1; }
 	@TAR=; \
 	if [ -f www/rootfs-x86_64.tar.gz ]; then TAR=www/rootfs-x86_64.tar.gz; \
@@ -578,12 +579,12 @@ generic-assemble:
 		cp -f init "$$tmp/bin/init" && chmod +x "$$tmp/bin/init"; \
 		rm -rf "$$tmp/tmp" && mkdir -p "$$tmp/tmp" "$$tmp/home/root"; \
 		chmod 1777 "$$tmp/tmp"; \
-		tar czf rootfs-generic.tar.gz -C "$$tmp" .; \
+		tar czf $(GENERIC_TAR) -C "$$tmp" .; \
 		rm -rf "$$tmp"; \
 	else \
-		$(MAKE) PLATFORM=generic rootfs-generic.tar.gz; \
+		$(MAKE) PLATFORM=x86_64-generic $(GENERIC_TAR); \
 	fi
-	@ls -lh rootfs-generic.tar.gz
+	@ls -lh $(GENERIC_TAR)
 
 # --- radxa boot files + image -----------------------------------------------
 
@@ -739,7 +740,7 @@ endif
 help:
 	@echo "lin0 — each platform is a Make target."
 	@echo "  make <platform>   one of: $(PLATFORMS)"
-	@echo "  make generic      x86_64 userland + current PC/VM kernel (tarball)"
+	@echo "  make x86_64-generic   userland + current PC/VM kernel (tarball)"
 	@echo "  make radxacm5io   rootfs tarball + hybrid image"
 	@echo "  make rpizero-img  SD image from rootfs-rpizero.tar.gz"
 	@echo "  Edit etc/*, init, configs/* — then rebuild."
