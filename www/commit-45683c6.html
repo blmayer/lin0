@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lin0 45683c6</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}</style>
+<pre>
+<a href=index.html>lin0</a> / <b>commit</b>
+
+<a href=log.html>log</a> | <a href=tree.html>tree</a> | <a href=refs.html>refs</a>
+
+commit 45683c6
+parent <a href=commit-da1a6c9.html>da1a6c9</a> 
+author Brian Mayer &lt;bleemayer@gmail.com&gt;
+date   2026-09-17T21:39:26-03:00
+
+    Rename the PC/VM platform to x86_64-generic.
+
+    The Make target, configs, and tarball are now x86_64-generic
+    (rootfs-x86_64-generic.tar.gz). Refresh the build docs so they
+    match the Makefile: no make.sh, Docker only for this target and
+    radxacm5io, and a correct host-arch default.
+
+<a href=tree-45683c6.html>tree</a>
+
+<b>diff</b>
+
+diff --git a/configs/generic-linux.config b/configs/x86_64-generic-linux.config
+similarity index 100%
+rename from configs/generic-linux.config
+rename to configs/x86_64-generic-linux.config
+diff --git a/configs/generic-toybox.config b/configs/x86_64-generic-toybox.config
+similarity index 100%
+rename from configs/generic-toybox.config
+rename to configs/x86_64-generic-toybox.config
+</pre>
