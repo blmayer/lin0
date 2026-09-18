@@ -73,30 +73,30 @@ to keep track you can also see the <a href=feed.xml>feed</a>.
 <b>images</b>
 
 if you don't want to build the whole system we
-provide system images in various formats so you can
-start with a ready environment.
+provide system images in various formats so you
+can start with a ready environment.
 
 
 <i>tarballs</i>
 
 our tarballs are compressed with gzip, thus .tar.gz
-files. arch-only builds have no kernel; the rest do.
+files. arch-only builds have no kernel; others do.
 
-+----------------------+------+------------------+
-| platform             | size | sha256           |
-+----------------------+------+------------------+
-| <a href=rootfs-x86_64.tar.gz download>x86_64</a>               | 4.7M | ad3d52203ff36ac3 |
-| <a href=rootfs-x86_64-generic.tar.gz download>x86_64-generic</a>       |  19M | 336be7abb70930ab |
-| <a href=rootfs-arm64.tar.gz download>arm64</a>                | 3.9M | a4f99c89fb6b2d97 |
-| <a href=rootfs-hpelitedesk.tar.gz download>hp elite desk 800 g1</a> |  14M | 73752c23c40d1fdd |
-| <a href=rootfs-pinebookpro.tar.gz download>pinebook pro</a>         |  14M | 3e49689772dc0235 |
-| <a href=rootfs-rpi3b+.tar.gz download>raspberry pi 3b+</a>     |  35M | 6b859999760e0d59 |
-| <a href=rootfs-rpi-cm5io.tar.gz download>rpi cm5 + io board</a>   |  51M | 06bb5b9fdda241a9 |
-| <a href=rootfs-radxacm5io.tar.gz download>radxa cm5 + io</a>       |  27M | 0af2d1501e4e6c82 |
-+----------------------+------+------------------+
++------------------------+------+------------------+
+| platform               | size | sha256           |
++------------------------+------+------------------+
+| <a href=rootfs-x86_64.tar.gz download>x86_64</a>                 | 4.7M | ad3d52203ff36ac3 |
+| <a href=rootfs-x86_64-generic.tar.gz download>x86_64-generic</a>         |  19M | 336be7abb70930ab |
+| <a href=rootfs-arm64.tar.gz download>arm64</a>                  | 3.9M | a4f99c89fb6b2d97 |
+| <a href=rootfs-hpelitedesk.tar.gz download>hp elite desk 800 g1</a>   |  14M | 73752c23c40d1fdd |
+| <a href=rootfs-pinebookpro.tar.gz download>pinebook pro</a>           |  14M | 3e49689772dc0235 |
+| <a href=rootfs-rpi3b+.tar.gz download>raspberry pi 3b+</a>       |  35M | 6b859999760e0d59 |
+| <a href=rootfs-rpi-cm5io.tar.gz download>rpi cm5 + io board</a>     |  51M | 06bb5b9fdda241a9 |
+| <a href=rootfs-radxacm5io.tar.gz download>radxa cm5 + io</a>         |  27M | 0af2d1501e4e6c82 |
++------------------------+------+------------------+
 
-sha256 column is a short prefix; full digests
-live in <a href=SHA256SUMS download>SHA256SUMS</a>. verify with:
+sha256 column is a short prefix; full digests live
+in <a href=SHA256SUMS download>SHA256SUMS</a>. verify with:
 
 sha256sum -c SHA256SUMS
 # macOS: shasum -a 256 -c SHA256SUMS
@@ -129,32 +129,29 @@ make x86_64
 make x86_64-generic
 make radxacm5io
 
-on macos, x86_64-generic and radxacm5io
-run inside docker. other platforms want
-a linux host (they chroot the new rootfs).
+on macos, x86_64-generic and radxacm5io run inside
+docker. other platforms want a linux host because
+they chroot into the new rootfs.
 
-configs live in configs/, static files
-in etc/. output is rootfs-&lt;platform&gt;.tar.gz
-(x86_64-generic writes
-rootfs-x86_64-generic.tar.gz).
+configs live in configs/, static files in etc/.
+output is rootfs-&lt;platform&gt;.tar.gz.
+x86_64-generic is rootfs-x86_64-generic.tar.gz.
 
-edit configs, etc, or init, then
-rebuild. make only rebuilds what
-changed.
+edit configs, etc, or init, then rebuild. make only
+rebuilds what changed.
 
 
 <i>from tarball</i>
 
 if you downloaded the tarball you can simply untar
-it to your destination partition. then copy your
+it to your destination partition, then copy your
 kernel to the boot folder.
 
 
 <b>usage</b>
 
-after built the system should boot to a login
-prompt, the default user is root and password is
-lin0.
+after it is built the system should boot to a login
+prompt. the default user is root, password is lin0.
 
 however, your lin0 system is not ready yet for real
 work: some configuration is needed, since we don't
@@ -175,8 +172,8 @@ an email to:
 
 lin0 AT terminal DOT pink
 
-the <a href=wiki.html>wiki</a> collects practical setup
-notes; more pages welcome.
+the <a href=wiki.html>wiki</a> collects practical setup notes; more
+pages welcome.
 
 
 <b>license</b>
