@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lin0 9c1353c</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}</style>
+<pre>
+<a href=index.html>lin0</a> / <b>commit</b>
+
+<a href=log.html>log</a> | <a href=tree.html>tree</a> | <a href=refs.html>refs</a>
+
+commit 9c1353c
+parent <a href=commit-45683c6.html>45683c6</a> 
+author Brian Mayer &lt;bleemayer@gmail.com&gt;
+date   2026-09-17T21:39:26-03:00
+
+    www: refresh captain pages.
+
+<a href=tree-9c1353c.html>tree</a>
+
+<b>diff</b>
+
+diff --git a/www/log.html b/www/log.html
+index bc4b670..c02a8b3 100644
+--- a/www/log.html
++++ b/www/log.html
+@@ -14,6 +14,8 @@ clone: git clone https://terminal.pink/lin0.git
+ 
+ hash     message                  date        author
+ -------  -----------------------  ----------  ------
++&lt;a href=commit-45683c6.html&gt;45683c6&lt;/a&gt;  Rename the PC/VM platfo  2026-09-17  Brian 
++&lt;a href=commit-da1a6c9.html&gt;da1a6c9&lt;/a&gt;  www: refresh captain pa  2026-09-17  Brian 
+ &lt;a href=commit-ceabce2.html&gt;ceabce2&lt;/a&gt;  Add a generic x86_64 pl  2026-09-17  Brian 
+ &lt;a href=commit-afeb288.html&gt;afeb288&lt;/a&gt;  README: document the te  2026-08-28  Brian 
+ &lt;a href=commit-5816a2d.html&gt;5816a2d&lt;/a&gt;  www: do not indent code  2026-08-05  Brian 
+diff --git a/www/refs.html b/www/refs.html
+index 4cf6806..77672c4 100644
+--- a/www/refs.html
++++ b/www/refs.html
+@@ -14,7 +14,7 @@
+ 
+ name          hash     message                      
+ ------------  -------  -----------------------------
+-main          &lt;a href=commit-ceabce2.html&gt;ceabce2&lt;/a&gt;  Add a generic x86_64 platform
++main          &lt;a href=commit-45683c6.html&gt;45683c6&lt;/a&gt;  Rename the PC/VM platform to 
+ 
+ &lt;b&gt;tags&lt;/b&gt;
+ 
+diff --git a/www/tree-45683c6.html b/www/tree-45683c6.html
+new file mode 100644
+index 0000000..224edcd
+--- /dev/null
++++ b/www/tree-45683c6.html
+@@ -0,0 +1,287 @@
++&lt;!DOCTYPE html&gt;
++&lt;meta charset="UTF-8"&gt;
++&lt;meta name="viewport" content="width=device-width, initial-scale=1" /&gt;
++&lt;title&gt;lin0 tree 45683c6&lt;/title&gt;
++&lt;meta name="color-scheme" content="light dark"&gt;
++&lt;link rel=icon href=data:,&gt;
++&lt;style&gt;pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}&lt;/style&gt;
++&lt;pre&gt;
++&lt;a href=index.html&gt;lin0&lt;/a&gt; / &lt;b&gt;tree&lt;/b&gt;
++
++&lt;a href=log.html&gt;log&lt;/a&gt; | &lt;a href=tree.html&gt;tree&lt;/a&gt; | &lt;a href=refs.html&gt;refs&lt;/a&gt;
++
++commit &lt;a href=commit-45683c6.html&gt;45683c6&lt;/a&gt;
++Rename the PC/VM platform to x86_64-generic.
++
++size    perm    path                                
++------  ------  ------------------------------------
++     6  100644  .dockerignore                       
++   224  100644  .gitignore                          
++   194  100644  Dockerfile                          
++   30K  100644  Makefile                            
++   11K  100644  README.md                           
++  160K  100644  configs/hpelitedesk-linux.config    
++    7K  100644  configs/hpelitedesk-toybox.config   
++  224K  100644  configs/m1mac-linux.config          
++    7K  100644  configs/m1mac-toybox.config         
++  224K  100644  configs/pinebookpro-linux.config    
++    7K  100644  configs/pinebookpro-toybox.config   
++   15K  100644  configs/radxacm5io-kernel.fragment  
++  129K  100644  configs/radxacm5io-linux.config     
++    7K  100755  configs/radxacm5io-toybox.config    
++  208K  100644  configs/rpi-cm5io-linux.config      
++    7K  100644  configs/rpi-cm5io-toybox.config     
++  203K  100644  configs/rpi3bplus-linux.config      
++    7K  100644  configs/rpi3bplus-toybox.config     
++    4K  100644  configs/rpizero-linux.config        
++    7K  100644  configs/rpizero-toybox.config       
++  139K  100644  configs/x86_64-generic-linux.config 
++    7K  100644  configs/x86_64-generic-toybox.config
++  139K  100644  configs/x86_64-linux.config         
++    7K  100644  configs/x86_64-toybox.config        
++    47  100644  etc/group                           
++     5  100644  etc/hostname                        
++    67  100644  etc/hosts                           
++   679  100644  etc/issue                           
++   13K  100644  etc/login.defs                      
++   353  100644  etc/os-release                      
++    47  100644  etc/passwd                          
++   274  100644  etc/profile                         
++    51  100644  etc/resolv.conf                     
++     8  100644  etc/shells                          
++    1K  100755  hotplugd                            
++    1K  100755  init                                
++    6K  100644  patches/.DS_Store                   
++    2K  100644  patches/linux-radxacm5io-0001-add-hy
++    1K  100644  patches/tcc-0001-added-ld-path-for-b
++    1K  100644  patches/toybox-0001-getty-show-issue
++    2K  100644  patches/upstream/0001-arm64-dts-rock
++   195  100644  patches/upstream/cover-letter.txt   
++     0  100644  pkg/.gitkeep                        
++   26M  100644  rootfs-radxacm5io.tar.gz            
++   521  100755  scripts/after-boot.sh               
++    1K  100755  scripts/gen-radxacm5io-linux-config.
++    5K  100755  scripts/gpt-resize-p3.py            
++    1K  100755  scripts/make-target.sh              
++    3K  100755  scripts/mkimg-rpizero.sh            
++   167  100755  scripts/mounts.sh                   
++   435  100755  scripts/post-install-hpelitedesk.sh 
++   378  100755  scripts/post-install-m1mac.sh       
++   547  100755  scripts/post-install-pinebookpro.sh 
++    1K  100755  scripts/post-install-rpi-cm5io.sh   
++    2K  100755  scripts/post-install-rpi3bplus.sh   
++    3K  100755  scripts/post-install-rpizero.sh     
++    91  100755  scripts/umounts.sh                  
++   713  100644  www/SHA256SUMS                      
++    1K  100644  www/commit-012ae9a.html             
++   26K  100644  www/commit-02dd78d.html             
++    1K  100644  www/commit-0350c10.html             
++    2K  100644  www/commit-0511dd4.html             
++    1K  100644  www/commit-06e2a30.html             
++    2K  100644  www/commit-09420d6.html             
++    1K  100644  www/commit-0c95da4.html             
++    2K  100644  www/commit-0d16ef6.html             
++    2K  100644  www/commit-0db9ed3.html             
++    1K  100644  www/commit-12c8ecd.html             
++    1K  100644  www/commit-12d61da.html             
++    1K  100644  www/commit-14f5a52.html             
++  237K  100644  www/commit-164e084.html             
++  387K  100644  www/commit-1d0bb3b.html             
++    6K  100644  www/commit-1e33419.html             
++  177K  100644  www/commit-1f27578.html             
++   700  100644  www/commit-27fbf17.html             
++   835  100644  www/commit-2a07fe6.html             
++    1K  100644  www/commit-2eaebd3.html             
++   800  100644  www/commit-31e0e39.html             
++    4K  100644  www/commit-330fa78.html             
++    5K  100644  www/commit-3682cec.html             
++   38K  100644  www/commit-38b3702.html             
++   41K  100644  www/commit-39c8531.html             
++    3K  100644  www/commit-3ac4608.html             
++    1K  100644  www/commit-3b062f7.html             
++    5K  100644  www/commit-3e5579c.html             
++   10K  100644  www/commit-3ed1335.html             
++    1K  100644  www/commit-4281fc8.html             
++   759  100644  www/commit-4862ebc.html             
++    1K  100644  www/commit-49c4c9d.html             
++    5K  100644  www/commit-515f430.html             
++   820  100644  www/commit-51d6f2c.html             
++    1K  100644  www/commit-56e823a.html             
++    1K  100644  www/commit-5816a2d.html             
++   90K  100644  www/commit-58d8bd4.html             
++    2K  100644  www/commit-5e81d39.html             
++    1K  100644  www/commit-680d55c.html             
++    9K  100644  www/commit-69821cb.html             
++    2K  100644  www/commit-6efef7f.html             
++   49K  100644  www/commit-6f1cc04.html             
++    1K  100644  www/commit-711a1c4.html             
++   13K  100644  www/commit-72e4eaf.html             
++    1K  100644  www/commit-7510151.html             
++    1K  100644  www/commit-76faac0.html             
++    1K  100644  www/commit-7a87bd8.html             
++    1K  100644  www/commit-7e45868.html             
++    6K  100644  www/commit-7f13f00.html             
++    1K  100644  www/commit-80bb6f4.html             
++    1K  100644  www/commit-8bc948a.html             
++    2K  100644  www/commit-8c79baf.html             
++    2K  100644  www/commit-8c8dbe4.html             
++   823  100644  www/commit-8d7ce18.html             
++    5K  100644  www/commit-93b8f04.html             
++    1K  100644  www/commit-93dd149.html             
++   837  100644  www/commit-95c6745.html             
++    1K  100644  www/commit-9672a8d.html             
++    2M  100644  www/commit-969c6d6.html             
++   812  100644  www/commit-9e66133.html             
++  205K  100644  www/commit-a38fc29.html             
++    7K  100644  www/commit-a4cec87.html             
++    2M  100644  www/commit-a9a4280.html             
++   63K  100644  www/commit-aa97285.html             
++    1K  100644  www/commit-addf8e0.html             
++    3K  100644  www/commit-afeb288.html             
++   19K  100644  www/commit-b26aa08.html             
++    1K  100644  www/commit-b3e163c.html             
++   805  100644  www/commit-b487add.html             
++    2K  100644  www/commit-b567abe.html             
++    1K  100644  www/commit-bedfb27.html             
++    3K  100644  www/commit-c0cd2c3.html             
++   816  100644  www/commit-c26fe75.html             
++    1K  100644  www/commit-c47e7bc.html             
++  277K  100644  www/commit-c55e5ce.html             
++    3K  100644  www/commit-c5816f3.html             
++    4K  100644  www/commit-c5f44b5.html             
++  122K  100644  www/commit-c6c7ea4.html             
++  243K  100644  www/commit-ca083d4.html             
++   802  100644  www/commit-cae1ee8.html             
++    2K  100644  www/commit-cd9c33c.html             
++  175K  100644  www/commit-ceabce2.html             
++    1K  100644  www/commit-cfb9a3f.html             
++    1K  100644  www/commit-d05cbeb.html             
++   11K  100644  www/commit-d124ca3.html             
++    2K  100644  www/commit-d196911.html             
++    1K  100644  www/commit-d302632.html             
++    1K  100644  www/commit-d8263fe.html             
++   980  100644  www/commit-d8b12f6.html             
++   804  100644  www/commit-da363df.html             
++   702  100644  www/commit-dc30239.html             
++    3K  100644  www/commit-ddeb0a6.html             
++    6K  100644  www/commit-e4e3479.html             
++  235K  100644  www/commit-e79519a.html             
++    1K  100644  www/commit-eaba8cd.html             
++   806  100644  www/commit-ebf55ec.html             
++   783  100644  www/commit-f2c5529.html             
++   15K  100644  www/commit-f84b93a.html             
++    1K  100644  www/commit-fb9c98f.html             
++    2K  100644  www/commit-feede66.html             
++    4K  100644  www/index.html                      
++    8K  100644  www/log.html                        
++   848  100644  www/refs.html                       
++    3M  100644  www/rootfs-arm64.tar.gz             
++   18M  100644  www/rootfs-generic.tar.gz           
++   14M  100644  www/rootfs-hpelitedesk.tar.gz       
++   13M  100644  www/rootfs-pinebookpro.tar.gz       
++   26M  100644  www/rootfs-radxacm5io.tar.gz        
++   51M  100644  www/rootfs-rpi-cm5io.tar.gz         
++   35M  100644  www/rootfs-rpi3b+.tar.gz            
++    4M  100644  www/rootfs-x86_64.tar.gz            
++   985  100644  www/tree-012ae9a.html               
++    1K  100644  www/tree-02dd78d.html               
++    1K  100644  www/tree-0350c10.html               
++   666  100644  www/tree-0511dd4.html               
++   899  100644  www/tree-06e2a30.html               
++    2K  100644  www/tree-09420d6.html               
++   992  100644  www/tree-0c95da4.html               
++    1K  100644  www/tree-0d16ef6.html               
++    1K  100644  www/tree-0db9ed3.html               
++    1K  100644  www/tree-12c8ecd.html               
++   925  100644  www/tree-12d61da.html               
++   665  100644  www/tree-14f5a52.html               
++   638  100644  www/tree-164e084.html               
++    1K  100644  www/tree-1d0bb3b.html               
++    1K  100644  www/tree-1e33419.html               
++   898  100644  www/tree-1f27578.html               
++    2K  100644  www/tree-27fbf17.html               
++    1K  100644  www/tree-2a07fe6.html               
++   13K  100644  www/tree-2eaebd3.html               
++    1K  100644  www/tree-31e0e39.html               
++    1K  100644  www/tree-330fa78.html               
++    1K  100644  www/tree-3682cec.html               
++    1K  100644  www/tree-38b3702.html               
++    2K  100644  www/tree-39c8531.html               
++    1K  100644  www/tree-3ac4608.html               
++    1K  100644  www/tree-3b062f7.html               
++    2K  100644  www/tree-3e5579c.html               
++   918  100644  www/tree-3ed1335.html               
++   900  100644  www/tree-4281fc8.html               
++    1K  100644  www/tree-4862ebc.html               
++    1K  100644  www/tree-49c4c9d.html               
++    1K  100644  www/tree-515f430.html               
++    1K  100644  www/tree-51d6f2c.html               
++   669  100644  www/tree-56e823a.html               
++   13K  100644  www/tree-5816a2d.html               
++    1K  100644  www/tree-58d8bd4.html               
++    1K  100644  www/tree-5e81d39.html               
++    1K  100644  www/tree-680d55c.html               
++    2K  100644  www/tree-69821cb.html               
++    1K  100644  www/tree-6efef7f.html               
++    1K  100644  www/tree-6f1cc04.html               
++    1K  100644  www/tree-711a1c4.html               
++    2K  100644  www/tree-72e4eaf.html               
++   13K  100644  www/tree-7510151.html               
++    1K  100644  www/tree-76faac0.html               
++    1K  100644  www/tree-7a87bd8.html               
++   917  100644  www/tree-7e45868.html               
++   818  100644  www/tree-7f13f00.html               
++   905  100644  www/tree-80bb6f4.html               
++   672  100644  www/tree-8bc948a.html               
++    1K  100644  www/tree-8c79baf.html               
++    1K  100644  www/tree-8c8dbe4.html               
++    1K  100644  www/tree-8d7ce18.html               
++   994  100644  www/tree-93b8f04.html               
++   13K  100644  www/tree-93dd149.html               
++   799  100644  www/tree-95c6745.html               
++    1K  100644  www/tree-9672a8d.html               
++   13K  100644  www/tree-969c6d6.html               
++    1K  100644  www/tree-9e66133.html               
++    1K  100644  www/tree-a38fc29.html               
++    1K  100644  www/tree-a4cec87.html               
++   13K  100644  www/tree-a9a4280.html               
++    2K  100644  www/tree-aa97285.html               
++    1K  100644  www/tree-addf8e0.html               
++   13K  100644  www/tree-afeb288.html               
++    2K  100644  www/tree-b26aa08.html               
++   796  100644  www/tree-b3e163c.html               
++    1K  100644  www/tree-b487add.html               
++    1K  100644  www/tree-b567abe.html               
++    1K  100644  www/tree-bedfb27.html               
++    1K  100644  www/tree-c0cd2c3.html               
++    1K  100644  www/tree-c26fe75.html               
++    1K  100644  www/tree-c47e7bc.html               
++    1K  100644  www/tree-c55e5ce.html               
++    1K  100644  www/tree-c5816f3.html               
++    2K  100644  www/tree-c5f44b5.html               
++   798  100644  www/tree-c6c7ea4.html               
++    1K  100644  www/tree-ca083d4.html               
++   916  100644  www/tree-cae1ee8.html               
++    1K  100644  www/tree-cd9c33c.html               
++   13K  100644  www/tree-ceabce2.html               
++   670  100644  www/tree-cfb9a3f.html               
++    2K  100644  www/tree-d05cbeb.html               
++    2K  100644  www/tree-d124ca3.html               
++    1K  100644  www/tree-d196911.html               
++    1K  100644  www/tree-d302632.html               
++   900  100644  www/tree-d8263fe.html               
++    1K  100644  www/tree-d8b12f6.html               
++    1K  100644  www/tree-da363df.html               
++    1K  100644  www/tree-dc30239.html               
++    1K  100644  www/tree-ddeb0a6.html               
++    3K  100644  www/tree-e4e3479.html               
++   844  100644  www/tree-e79519a.html               
++    1K  100644  www/tree-eaba8cd.html               
++    1K  100644  www/tree-ebf55ec.html               
++   862  100644  www/tree-f2c5529.html               
++    2K  100644  www/tree-f84b93a.html               
++   921  100644  www/tree-fb9c98f.html               
++    1K  100644  www/tree-feede66.html               
++   13K  100644  www/tree.html                       
++   14K  100644  www/wiki.html                       
++&lt;/pre&gt;
+diff --git a/www/tree-da1a6c9.html b/www/tree-da1a6c9.html
+new file mode 100644
+index 0000000..a7ce6b5
+--- /dev/null
++++ b/www/tree-da1a6c9.html
+@@ -0,0 +1,287 @@
++&lt;!DOCTYPE html&gt;
++&lt;meta charset="UTF-8"&gt;
++&lt;meta name="viewport" content="width=device-width, initial-scale=1" /&gt;
++&lt;title&gt;lin0 tree da1a6c9&lt;/title&gt;
++&lt;meta name="color-scheme" content="light dark"&gt;
++&lt;link rel=icon href=data:,&gt;
++&lt;style&gt;pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}&lt;/style&gt;
++&lt;pre&gt;
++&lt;a href=index.html&gt;lin0&lt;/a&gt; / &lt;b&gt;tree&lt;/b&gt;
++
++&lt;a href=log.html&gt;log&lt;/a&gt; | &lt;a href=tree.html&gt;tree&lt;/a&gt; | &lt;a href=refs.html&gt;refs&lt;/a&gt;
++
++commit &lt;a href=commit-da1a6c9.html&gt;da1a6c9&lt;/a&gt;
++www: refresh captain pages.
++
++size    perm    path                                
++------  ------  ------------------------------------
++     6  100644  .dockerignore                       
++   224  100644  .gitignore                          
++   194  100644  Dockerfile                          
++   30K  100644  Makefile                            
++   11K  100644  README.md                           
++  139K  100644  configs/generic-linux.config        
++    7K  100644  configs/generic-toybox.config       
++  160K  100644  configs/hpelitedesk-linux.config    
++    7K  100644  configs/hpelitedesk-toybox.config   
++  224K  100644  configs/m1mac-linux.config          
++    7K  100644  configs/m1mac-toybox.config         
++  224K  100644  configs/pinebookpro-linux.config    
++    7K  100644  configs/pinebookpro-toybox.config   
++   15K  100644  configs/radxacm5io-kernel.fragment  
++  129K  100644  configs/radxacm5io-linux.config     
++    7K  100755  configs/radxacm5io-toybox.config    
++  208K  100644  configs/rpi-cm5io-linux.config      
++    7K  100644  configs/rpi-cm5io-toybox.config     
++  203K  100644  configs/rpi3bplus-linux.config      
++    7K  100644  configs/rpi3bplus-toybox.config     
++    4K  100644  configs/rpizero-linux.config        
++    7K  100644  configs/rpizero-toybox.config       
++  139K  100644  configs/x86_64-linux.config         
++    7K  100644  configs/x86_64-toybox.config        
++    47  100644  etc/group                           
++     5  100644  etc/hostname                        
++    67  100644  etc/hosts                           
++   679  100644  etc/issue                           
++   13K  100644  etc/login.defs                      
++   353  100644  etc/os-release                      
++    47  100644  etc/passwd                          
++   274  100644  etc/profile                         
++    51  100644  etc/resolv.conf                     
++     8  100644  etc/shells                          
++    1K  100755  hotplugd                            
++    1K  100755  init                                
++    6K  100644  patches/.DS_Store                   
++    2K  100644  patches/linux-radxacm5io-0001-add-hy
++    1K  100644  patches/tcc-0001-added-ld-path-for-b
++    1K  100644  patches/toybox-0001-getty-show-issue
++    2K  100644  patches/upstream/0001-arm64-dts-rock
++   195  100644  patches/upstream/cover-letter.txt   
++     0  100644  pkg/.gitkeep                        
++   26M  100644  rootfs-radxacm5io.tar.gz            
++   521  100755  scripts/after-boot.sh               
++    1K  100755  scripts/gen-radxacm5io-linux-config.
++    5K  100755  scripts/gpt-resize-p3.py            
++    1K  100755  scripts/make-target.sh              
++    3K  100755  scripts/mkimg-rpizero.sh            
++   167  100755  scripts/mounts.sh                   
++   435  100755  scripts/post-install-hpelitedesk.sh 
++   378  100755  scripts/post-install-m1mac.sh       
++   547  100755  scripts/post-install-pinebookpro.sh 
++    1K  100755  scripts/post-install-rpi-cm5io.sh   
++    2K  100755  scripts/post-install-rpi3bplus.sh   
++    3K  100755  scripts/post-install-rpizero.sh     
++    91  100755  scripts/umounts.sh                  
++   713  100644  www/SHA256SUMS                      
++    1K  100644  www/commit-012ae9a.html             
++   26K  100644  www/commit-02dd78d.html             
++    1K  100644  www/commit-0350c10.html             
++    2K  100644  www/commit-0511dd4.html             
++    1K  100644  www/commit-06e2a30.html             
++    2K  100644  www/commit-09420d6.html             
++    1K  100644  www/commit-0c95da4.html             
++    2K  100644  www/commit-0d16ef6.html             
++    2K  100644  www/commit-0db9ed3.html             
++    1K  100644  www/commit-12c8ecd.html             
++    1K  100644  www/commit-12d61da.html             
++    1K  100644  www/commit-14f5a52.html             
++  237K  100644  www/commit-164e084.html             
++  387K  100644  www/commit-1d0bb3b.html             
++    6K  100644  www/commit-1e33419.html             
++  177K  100644  www/commit-1f27578.html             
++   700  100644  www/commit-27fbf17.html             
++   835  100644  www/commit-2a07fe6.html             
++    1K  100644  www/commit-2eaebd3.html             
++   800  100644  www/commit-31e0e39.html             
++    4K  100644  www/commit-330fa78.html             
++    5K  100644  www/commit-3682cec.html             
++   38K  100644  www/commit-38b3702.html             
++   41K  100644  www/commit-39c8531.html             
++    3K  100644  www/commit-3ac4608.html             
++    1K  100644  www/commit-3b062f7.html             
++    5K  100644  www/commit-3e5579c.html             
++   10K  100644  www/commit-3ed1335.html             
++    1K  100644  www/commit-4281fc8.html             
++   759  100644  www/commit-4862ebc.html             
++    1K  100644  www/commit-49c4c9d.html             
++    5K  100644  www/commit-515f430.html             
++   820  100644  www/commit-51d6f2c.html             
++    1K  100644  www/commit-56e823a.html             
++    1K  100644  www/commit-5816a2d.html             
++   90K  100644  www/commit-58d8bd4.html             
++    2K  100644  www/commit-5e81d39.html             
++    1K  100644  www/commit-680d55c.html             
++    9K  100644  www/commit-69821cb.html             
++    2K  100644  www/commit-6efef7f.html             
++   49K  100644  www/commit-6f1cc04.html             
++    1K  100644  www/commit-711a1c4.html             
++   13K  100644  www/commit-72e4eaf.html             
++    1K  100644  www/commit-7510151.html             
++    1K  100644  www/commit-76faac0.html             
++    1K  100644  www/commit-7a87bd8.html             
++    1K  100644  www/commit-7e45868.html             
++    6K  100644  www/commit-7f13f00.html             
++    1K  100644  www/commit-80bb6f4.html             
++    1K  100644  www/commit-8bc948a.html             
++    2K  100644  www/commit-8c79baf.html             
++    2K  100644  www/commit-8c8dbe4.html             
++   823  100644  www/commit-8d7ce18.html             
++    5K  100644  www/commit-93b8f04.html             
++    1K  100644  www/commit-93dd149.html             
++   837  100644  www/commit-95c6745.html             
++    1K  100644  www/commit-9672a8d.html             
++    2M  100644  www/commit-969c6d6.html             
++   812  100644  www/commit-9e66133.html             
++  205K  100644  www/commit-a38fc29.html             
++    7K  100644  www/commit-a4cec87.html             
++    2M  100644  www/commit-a9a4280.html             
++   63K  100644  www/commit-aa97285.html             
++    1K  100644  www/commit-addf8e0.html             
++    3K  100644  www/commit-afeb288.html             
++   19K  100644  www/commit-b26aa08.html             
++    1K  100644  www/commit-b3e163c.html             
++   805  100644  www/commit-b487add.html             
++    2K  100644  www/commit-b567abe.html             
++    1K  100644  www/commit-bedfb27.html             
++    3K  100644  www/commit-c0cd2c3.html             
++   816  100644  www/commit-c26fe75.html             
++    1K  100644  www/commit-c47e7bc.html             
++  277K  100644  www/commit-c55e5ce.html             
++    3K  100644  www/commit-c5816f3.html             
++    4K  100644  www/commit-c5f44b5.html             
++  122K  100644  www/commit-c6c7ea4.html             
++  243K  100644  www/commit-ca083d4.html             
++   802  100644  www/commit-cae1ee8.html             
++    2K  100644  www/commit-cd9c33c.html             
++  175K  100644  www/commit-ceabce2.html             
++    1K  100644  www/commit-cfb9a3f.html             
++    1K  100644  www/commit-d05cbeb.html             
++   11K  100644  www/commit-d124ca3.html             
++    2K  100644  www/commit-d196911.html             
++    1K  100644  www/commit-d302632.html             
++    1K  100644  www/commit-d8263fe.html             
++   980  100644  www/commit-d8b12f6.html             
++   804  100644  www/commit-da363df.html             
++   702  100644  www/commit-dc30239.html             
++    3K  100644  www/commit-ddeb0a6.html             
++    6K  100644  www/commit-e4e3479.html             
++  235K  100644  www/commit-e79519a.html             
++    1K  100644  www/commit-eaba8cd.html             
++   806  100644  www/commit-ebf55ec.html             
++   783  100644  www/commit-f2c5529.html             
++   15K  100644  www/commit-f84b93a.html             
++    1K  100644  www/commit-fb9c98f.html             
++    2K  100644  www/commit-feede66.html             
++    4K  100644  www/index.html                      
++    8K  100644  www/log.html                        
++   848  100644  www/refs.html                       
++    3M  100644  www/rootfs-arm64.tar.gz             
++   18M  100644  www/rootfs-generic.tar.gz           
++   14M  100644  www/rootfs-hpelitedesk.tar.gz       
++   13M  100644  www/rootfs-pinebookpro.tar.gz       
++   26M  100644  www/rootfs-radxacm5io.tar.gz        
++   51M  100644  www/rootfs-rpi-cm5io.tar.gz         
++   35M  100644  www/rootfs-rpi3b+.tar.gz            
++    4M  100644  www/rootfs-x86_64.tar.gz            
++   985  100644  www/tree-012ae9a.html               
++    1K  100644  www/tree-02dd78d.html               
++    1K  100644  www/tree-0350c10.html               
++   666  100644  www/tree-0511dd4.html               
++   899  100644  www/tree-06e2a30.html               
++    2K  100644  www/tree-09420d6.html               
++   992  100644  www/tree-0c95da4.html               
++    1K  100644  www/tree-0d16ef6.html               
++    1K  100644  www/tree-0db9ed3.html               
++    1K  100644  www/tree-12c8ecd.html               
++   925  100644  www/tree-12d61da.html               
++   665  100644  www/tree-14f5a52.html               
++   638  100644  www/tree-164e084.html               
++    1K  100644  www/tree-1d0bb3b.html               
++    1K  100644  www/tree-1e33419.html               
++   898  100644  www/tree-1f27578.html               
++    2K  100644  www/tree-27fbf17.html               
++    1K  100644  www/tree-2a07fe6.html               
++   13K  100644  www/tree-2eaebd3.html               
++    1K  100644  www/tree-31e0e39.html               
++    1K  100644  www/tree-330fa78.html               
++    1K  100644  www/tree-3682cec.html               
++    1K  100644  www/tree-38b3702.html               
++    2K  100644  www/tree-39c8531.html               
++    1K  100644  www/tree-3ac4608.html               
++    1K  100644  www/tree-3b062f7.html               
++    2K  100644  www/tree-3e5579c.html               
++   918  100644  www/tree-3ed1335.html               
++   900  100644  www/tree-4281fc8.html               
++    1K  100644  www/tree-4862ebc.html               
++    1K  100644  www/tree-49c4c9d.html               
++    1K  100644  www/tree-515f430.html               
++    1K  100644  www/tree-51d6f2c.html               
++   669  100644  www/tree-56e823a.html               
++   13K  100644  www/tree-5816a2d.html               
++    1K  100644  www/tree-58d8bd4.html               
++    1K  100644  www/tree-5e81d39.html               
++    1K  100644  www/tree-680d55c.html               
++    2K  100644  www/tree-69821cb.html               
++    1K  100644  www/tree-6efef7f.html               
++    1K  100644  www/tree-6f1cc04.html               
++    1K  100644  www/tree-711a1c4.html               
++    2K  100644  www/tree-72e4eaf.html               
++   13K  100644  www/tree-7510151.html               
++    1K  100644  www/tree-76faac0.html               
++    1K  100644  www/tree-7a87bd8.html               
++   917  100644  www/tree-7e45868.html               
++   818  100644  www/tree-7f13f00.html               
++   905  100644  www/tree-80bb6f4.html               
++   672  100644  www/tree-8bc948a.html               
++    1K  100644  www/tree-8c79baf.html               
++    1K  100644  www/tree-8c8dbe4.html               
++    1K  100644  www/tree-8d7ce18.html               
++   994  100644  www/tree-93b8f04.html               
++   13K  100644  www/tree-93dd149.html               
++   799  100644  www/tree-95c6745.html               
++    1K  100644  www/tree-9672a8d.html               
++   13K  100644  www/tree-969c6d6.html               
++    1K  100644  www/tree-9e66133.html               
++    1K  100644  www/tree-a38fc29.html               
++    1K  100644  www/tree-a4cec87.html               
++   13K  100644  www/tree-a9a4280.html               
++    2K  100644  www/tree-aa97285.html               
++    1K  100644  www/tree-addf8e0.html               
++   13K  100644  www/tree-afeb288.html               
++    2K  100644  www/tree-b26aa08.html               
++   796  100644  www/tree-b3e163c.html               
++    1K  100644  www/tree-b487add.html               
++    1K  100644  www/tree-b567abe.html               
++    1K  100644  www/tree-bedfb27.html               
++    1K  100644  www/tree-c0cd2c3.html               
++    1K  100644  www/tree-c26fe75.html               
++    1K  100644  www/tree-c47e7bc.html               
++    1K  100644  www/tree-c55e5ce.html               
++    1K  100644  www/tree-c5816f3.html               
++    2K  100644  www/tree-c5f44b5.html               
++   798  100644  www/tree-c6c7ea4.html               
++    1K  100644  www/tree-ca083d4.html               
++   916  100644  www/tree-cae1ee8.html               
++    1K  100644  www/tree-cd9c33c.html               
++   13K  100644  www/tree-ceabce2.html               
++   670  100644  www/tree-cfb9a3f.html               
++    2K  100644  www/tree-d05cbeb.html               
++    2K  100644  www/tree-d124ca3.html               
++    1K  100644  www/tree-d196911.html               
++    1K  100644  www/tree-d302632.html               
++   900  100644  www/tree-d8263fe.html               
++    1K  100644  www/tree-d8b12f6.html               
++    1K  100644  www/tree-da363df.html               
++    1K  100644  www/tree-dc30239.html               
++    1K  100644  www/tree-ddeb0a6.html               
++    3K  100644  www/tree-e4e3479.html               
++   844  100644  www/tree-e79519a.html               
++    1K  100644  www/tree-eaba8cd.html               
++    1K  100644  www/tree-ebf55ec.html               
++   862  100644  www/tree-f2c5529.html               
++    2K  100644  www/tree-f84b93a.html               
++   921  100644  www/tree-fb9c98f.html               
++    1K  100644  www/tree-feede66.html               
++   13K  100644  www/tree.html                       
++   14K  100644  www/wiki.html                       
++&lt;/pre&gt;
+diff --git a/www/tree.html b/www/tree.html
+index 9fc7cf3..224edcd 100644
+--- a/www/tree.html
++++ b/www/tree.html
+@@ -1,7 +1,7 @@
+ &lt;!DOCTYPE html&gt;
+ &lt;meta charset="UTF-8"&gt;
+ &lt;meta name="viewport" content="width=device-width, initial-scale=1" /&gt;
+-&lt;title&gt;lin0 tree ceabce2&lt;/title&gt;
++&lt;title&gt;lin0 tree 45683c6&lt;/title&gt;
+ &lt;meta name="color-scheme" content="light dark"&gt;
+ &lt;link rel=icon href=data:,&gt;
+ &lt;style&gt;pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}&lt;/style&gt;
+@@ -10,8 +10,8 @@
+ 
+ &lt;a href=log.html&gt;log&lt;/a&gt; | &lt;a href=tree.html&gt;tree&lt;/a&gt; | &lt;a href=refs.html&gt;refs&lt;/a&gt;
+ 
+-commit &lt;a href=commit-ceabce2.html&gt;ceabce2&lt;/a&gt;
+-Add a generic x86_64 platform and refresh the arch-only tarball.
++commit &lt;a href=commit-45683c6.html&gt;45683c6&lt;/a&gt;
++Rename the PC/VM platform to x86_64-generic.
+ 
+ size    perm    path                                
+ ------  ------  ------------------------------------
+@@ -20,8 +20,6 @@ size    perm    path
+    194  100644  Dockerfile                          
+    30K  100644  Makefile                            
+    11K  100644  README.md                           
+-  139K  100644  configs/generic-linux.config        
+-    7K  100644  configs/generic-toybox.config       
+   160K  100644  configs/hpelitedesk-linux.config    
+     7K  100644  configs/hpelitedesk-toybox.config   
+   224K  100644  configs/m1mac-linux.config          
+@@ -37,6 +35,8 @@ size    perm    path
+     7K  100644  configs/rpi3bplus-toybox.config     
+     4K  100644  configs/rpizero-linux.config        
+     7K  100644  configs/rpizero-toybox.config       
++  139K  100644  configs/x86_64-generic-linux.config 
++    7K  100644  configs/x86_64-generic-toybox.config
+   139K  100644  configs/x86_64-linux.config         
+     7K  100644  configs/x86_64-toybox.config        
+     47  100644  etc/group                           
+@@ -91,6 +91,7 @@ size    perm    path
+   177K  100644  www/commit-1f27578.html             
+    700  100644  www/commit-27fbf17.html             
+    835  100644  www/commit-2a07fe6.html             
++    1K  100644  www/commit-2eaebd3.html             
+    800  100644  www/commit-31e0e39.html             
+     4K  100644  www/commit-330fa78.html             
+     5K  100644  www/commit-3682cec.html             
+@@ -106,6 +107,7 @@ size    perm    path
+     5K  100644  www/commit-515f430.html             
+    820  100644  www/commit-51d6f2c.html             
+     1K  100644  www/commit-56e823a.html             
++    1K  100644  www/commit-5816a2d.html             
+    90K  100644  www/commit-58d8bd4.html             
+     2K  100644  www/commit-5e81d39.html             
+     1K  100644  www/commit-680d55c.html             
+@@ -114,6 +116,7 @@ size    perm    path
+    49K  100644  www/commit-6f1cc04.html             
+     1K  100644  www/commit-711a1c4.html             
+    13K  100644  www/commit-72e4eaf.html             
++    1K  100644  www/commit-7510151.html             
+     1K  100644  www/commit-76faac0.html             
+     1K  100644  www/commit-7a87bd8.html             
+     1K  100644  www/commit-7e45868.html             
+@@ -124,14 +127,17 @@ size    perm    path
+     2K  100644  www/commit-8c8dbe4.html             
+    823  100644  www/commit-8d7ce18.html             
+     5K  100644  www/commit-93b8f04.html             
++    1K  100644  www/commit-93dd149.html             
+    837  100644  www/commit-95c6745.html             
+     1K  100644  www/commit-9672a8d.html             
+     2M  100644  www/commit-969c6d6.html             
+    812  100644  www/commit-9e66133.html             
+   205K  100644  www/commit-a38fc29.html             
+     7K  100644  www/commit-a4cec87.html             
++    2M  100644  www/commit-a9a4280.html             
+    63K  100644  www/commit-aa97285.html             
+     1K  100644  www/commit-addf8e0.html             
++    3K  100644  www/commit-afeb288.html             
+    19K  100644  www/commit-b26aa08.html             
+     1K  100644  www/commit-b3e163c.html             
+    805  100644  www/commit-b487add.html             
+@@ -147,6 +153,7 @@ size    perm    path
+   243K  100644  www/commit-ca083d4.html             
+    802  100644  www/commit-cae1ee8.html             
+     2K  100644  www/commit-cd9c33c.html             
++  175K  100644  www/commit-ceabce2.html             
+     1K  100644  www/commit-cfb9a3f.html             
+     1K  100644  www/commit-d05cbeb.html             
+    11K  100644  www/commit-d124ca3.html             
+@@ -167,7 +174,7 @@ size    perm    path
+     2K  100644  www/commit-feede66.html             
+     4K  100644  www/index.html                      
+     8K  100644  www/log.html                        
+-   825  100644  www/refs.html                       
++   848  100644  www/refs.html                       
+     3M  100644  www/rootfs-arm64.tar.gz             
+    18M  100644  www/rootfs-generic.tar.gz           
+    14M  100644  www/rootfs-hpelitedesk.tar.gz       
+@@ -194,6 +201,7 @@ size    perm    path
+    898  100644  www/tree-1f27578.html               
+     2K  100644  www/tree-27fbf17.html               
+     1K  100644  www/tree-2a07fe6.html               
++   13K  100644  www/tree-2eaebd3.html               
+     1K  100644  www/tree-31e0e39.html               
+     1K  100644  www/tree-330fa78.html               
+     1K  100644  www/tree-3682cec.html               
+@@ -209,6 +217,7 @@ size    perm    path
+     1K  100644  www/tree-515f430.html               
+     1K  100644  www/tree-51d6f2c.html               
+    669  100644  www/tree-56e823a.html               
++   13K  100644  www/tree-5816a2d.html               
+     1K  100644  www/tree-58d8bd4.html               
+     1K  100644  www/tree-5e81d39.html               
+     1K  100644  www/tree-680d55c.html               
+@@ -217,6 +226,7 @@ size    perm    path
+     1K  100644  www/tree-6f1cc04.html               
+     1K  100644  www/tree-711a1c4.html               
+     2K  100644  www/tree-72e4eaf.html               
++   13K  100644  www/tree-7510151.html               
+     1K  100644  www/tree-76faac0.html               
+     1K  100644  www/tree-7a87bd8.html               
+    917  100644  www/tree-7e45868.html               
+@@ -227,14 +237,17 @@ size    perm    path
+     1K  100644  www/tree-8c8dbe4.html               
+     1K  100644  www/tree-8d7ce18.html               
+    994  100644  www/tree-93b8f04.html               
++   13K  100644  www/tree-93dd149.html               
+    799  100644  www/tree-95c6745.html               
+     1K  100644  www/tree-9672a8d.html               
+    13K  100644  www/tree-969c6d6.html               
+     1K  100644  www/tree-9e66133.html               
+     1K  100644  www/tree-a38fc29.html               
+     1K  100644  www/tree-a4cec87.html               
++   13K  100644  www/tree-a9a4280.html               
+     2K  100644  www/tree-aa97285.html               
+     1K  100644  www/tree-addf8e0.html               
++   13K  100644  www/tree-afeb288.html               
+     2K  100644  www/tree-b26aa08.html               
+    796  100644  www/tree-b3e163c.html               
+     1K  100644  www/tree-b487add.html               
+@@ -250,6 +263,7 @@ size    perm    path
+     1K  100644  www/tree-ca083d4.html               
+    916  100644  www/tree-cae1ee8.html               
+     1K  100644  www/tree-cd9c33c.html               
++   13K  100644  www/tree-ceabce2.html               
+    670  100644  www/tree-cfb9a3f.html               
+     2K  100644  www/tree-d05cbeb.html               
+     2K  100644  www/tree-d124ca3.html               
+</pre>
