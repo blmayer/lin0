@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lin0 fe76b98</title>
+<meta name="color-scheme" content="light dark">
+<link rel=icon href=data:,>
+<style>pre{width:52ch;margin:2ch auto;white-space:pre-wrap}a{color:#ff00ff}</style>
+<pre>
+<a href=index.html>lin0</a> / <b>commit</b>
+
+<a href=log.html>log</a> | <a href=tree.html>tree</a> | <a href=refs.html>refs</a>
+
+commit fe76b98
+parent <a href=commit-bdd1d2c.html>bdd1d2c</a> 
+author Brian Mayer &lt;bleemayer@gmail.com&gt;
+date   2026-10-21T14:36:25-03:00
+
+    Link mksh, toybox, and tcc with /lib/libc.so.
+
+    musl's libc.so is the dynamic linker, so those binaries no longer
+    record the ld-musl symlink name. mksh is dynamic. The x86_64 and
+    x86_64-generic tarballs and their checksums match this userland.
+
+<a href=tree-fe76b98.html>tree</a>
+
+<b>diff</b>
+
+diff --git a/Makefile b/Makefile
+index ed59fa8..7fe1c89 100644
+--- a/Makefile
++++ b/Makefile
+@@ -65,10 +65,12 @@ MUSL_ARCH = $(if $(filter $(PLATFORM),$(AARCH64_PLATS)),aarch64,$(if $(filter rp
+ MUSL_LDSONAME := ld-musl-$(MUSL_ARCH).so.1
+ ROOTFS_MUSL_LD := rootfs/lib/$(MUSL_LDSONAME)
+ PLAT_CC := $(CURDIR)/rootfs/bin/musl-gcc
++# musl's libc.so is the dynamic linker. Do not bake in ld-musl-$ARCH.so.1.
++LIN0_ELFINTERP := /lib/libc.so
+ 
+ TOYBOX_CFLAGS := -Os -fPIE -I$(CURDIR)/rootfs/include $(TLS_CFLAGS)
+ TOYBOX_LDFLAGS = -pie -L$(CURDIR)/rootfs/lib -Wl,--gc-sections -Wl,-rpath,/lib \
+-	-ltls -lbearssl -Wl,-dynamic-linker,/lib/$(MUSL_LDSONAME)
++	-ltls -lbearssl -Wl,-dynamic-linker,$(LIN0_ELFINTERP)
+ TOYBOX_STRIP := strip -s -R .note -R .comment
+ 
+ ETC_SRC := $(shell find etc \( -type f -o -type l \) ! -path 'etc/ssl/*')
+@@ -263,6 +265,9 @@ rootfs/bin/toybox: configs/$(PLATFORM)-toybox.config build/toybox/.lin0-patched
+ 		! readelf -S $@ | grep -q '\.symtab' || { echo "toybox not stripped" &gt;&amp;2; exit 1; }; \
+ 		readelf -d $@ | grep -q 'libtls\.so' || { echo "toybox missing NEEDED libtls" &gt;&amp;2; exit 1; }; \
+ 		readelf -d $@ | grep -q '\[libc\.so\]' || { echo "toybox missing NEEDED libc.so" &gt;&amp;2; exit 1; }; \
++		interp=$$(readelf -l $@ | sed -n 's/.*\[Requesting program interpreter: \(.*\)\]/\1/p'); \
++		[ "$$interp" = "$(LIN0_ELFINTERP)" ] || { \
++			echo "error: toybox interpreter is '$$interp', expected $(LIN0_ELFINTERP)" &gt;&amp;2; exit 1; }; \
+ 	fi
+ 	@! strings $@ | grep -q GLIBC_ || { echo "toybox linked against glibc" &gt;&amp;2; exit 1; }
+ 	@ls -lh $@ $(ROOTFS_TLS_LIBS)
+@@ -275,16 +280,32 @@ rootfs/bin/make: rootfs/bin/musl-gcc build/make-$(MAKEVER)/configure
+ 	$(MAKE) -C build/make-$(MAKEVER) install
+ 	$(TOYBOX_STRIP) $@
+ 
++# Dynamic PIE. PT_INTERP is /lib/libc.so. musl's libc.so is the dynamic
++# linker; do not bake in /lib/ld-musl-$ARCH.so.1.
+ rootfs/bin/sh: rootfs/bin/musl-gcc build/mksh/Build.sh
+-	@echo "==&gt; mksh"
+-	cd build/mksh &amp;&amp; chmod +x Build.sh &amp;&amp; CC="$(PLAT_CC) -static --no-pie" ./Build.sh
++	@echo "==&gt; mksh (dynamic musl)"
++	cd build/mksh &amp;&amp; chmod +x Build.sh &amp;&amp; \
++		CC="$(PLAT_CC)" \
++		CFLAGS="-Os -fPIE" \
++		LDFLAGS="-pie -Wl,-dynamic-linker,$(LIN0_ELFINTERP)" \
++		./Build.sh
+ 	install -c -s -m 555 build/mksh/mksh $@
+ 	mkdir -p rootfs/share/man/man1
+ 	-install -c -m 444 build/mksh/mksh.1 rootfs/share/man/man1/
++	@if command -v readelf &gt;/dev/null; then \
++		interp=$$(readelf -l $@ | sed -n 's/.*\[Requesting program interpreter: \(.*\)\]/\1/p'); \
++		[ "$$interp" = "$(LIN0_ELFINTERP)" ] || { \
++			echo "error: mksh interpreter is '$$interp', expected $(LIN0_ELFINTERP)" &gt;&amp;2; exit 1; }; \
++		readelf -d $@ | grep -q '\[libc\.so\]' || { \
++			echo "error: mksh missing NEEDED libc.so" &gt;&amp;2; exit 1; }; \
++		! readelf -d $@ | grep -q 'libc\.so\.6\|ld-linux' || { \
++			echo "error: mksh linked against glibc" &gt;&amp;2; exit 1; }; \
++	fi
+ 
+ # tcc named tcc (libtool tcc*); cc is a symlink. Dynamic musl only.
+ # tccdir=/lib/tcc (private: libtcc1 + headers). Never tccdir=/lib (would create /lib/include).
+-TCC_ELFINTERP := /lib/$(MUSL_LDSONAME)
++# --config-musl fills elfinterp only when empty, so --elfinterp=/lib/libc.so wins.
++TCC_ELFINTERP := $(LIN0_ELFINTERP)
+ TCC_LDFLAGS := -Wl,-dynamic-linker,$(TCC_ELFINTERP) -L$(CURDIR)/rootfs/lib
+ rootfs/bin/tcc: rootfs/bin/make rootfs/bin/sh build/tinycc/.git \
+ 		$(LINUX_HEADERS) $(BOOT_IMAGE) rootfs/bin/musl-gcc $(ROOTFS_MUSL_LD) \
+@@ -449,7 +470,7 @@ skeleton-chroot: skeleton build/tinycc/.git scripts/make-target.sh
+ 	sudo mount -vt proc proc rootfs/proc
+ 	sudo mount -vt sysfs sysfs rootfs/sys
+ 	sudo chroot rootfs /bin/env -i HOME=/home/root PATH=/bin \
+-		MUSL_LDSONAME=$(MUSL_LDSONAME) /tmp/make-target.sh \
++		/tmp/make-target.sh \
+ 		|| { sudo scripts/umounts.sh; exit 1; }
+ 	sudo scripts/umounts.sh
+ 
+diff --git a/README.md b/README.md
+index 0937ea3..5c3b986 100644
+--- a/README.md
++++ b/README.md
+@@ -81,8 +81,8 @@ have no kernel; the rest do. Raspberry Pi Zero is build-only (not published).
+ +----------------------+------+------------------+------------------+
+ | platform             | size | sha256           | build            |
+ +----------------------+------+------------------+------------------+
+-| x86_64               | 4.7M | ad3d52203ff36ac3 | make x86_64      |
+-| x86_64-generic       |  19M | 336be7abb70930ab | make x86_64-generic     |
++| x86_64               | 4.6M | 9b24f1461be8bb2c | make x86_64      |
++| x86_64-generic       |  19M | eba825dd2336ba29 | make x86_64-generic     |
+ | arm64                | 3.9M | a4f99c89fb6b2d97 | make arm64       |
+ | hp elite desk 800 g1 |  14M | 73752c23c40d1fdd | make hpelitedesk |
+ | pinebook pro         |  14M | 3e49689772dc0235 | make pinebookpro |
+diff --git a/scripts/make-target.sh b/scripts/make-target.sh
+index 6596447..d12e33c 100755
+--- a/scripts/make-target.sh
++++ b/scripts/make-target.sh
+@@ -3,40 +3,34 @@
+ # running inside chroot
+ echo "building target system"
+ 
+-ARCH=$(uname -m)
+-case "$ARCH" in
+-arm64) ARCH=aarch64 ;;
+-esac
+-LDSO="${MUSL_LDSONAME:-ld-musl-${ARCH}.so.1}"
+-LDSO_PATH="/lib/$LDSO"
+-
++# PT_INTERP is /lib/libc.so. --config-musl would otherwise default to
++# ld-musl-$ARCH.so.1, and only when --elfinterp was left empty.
+ # create missing links
+ cd /
+ ln -srv lib/libc.so bin/ldd
+ ln -srv lib/libc.so bin/ld
+ 
+-echo "building target tcc (interp $LDSO_PATH)..."
++echo "building target tcc (interp /lib/libc.so)..."
+ cd /tmp/tinycc
+ 
+ ./configure --prefix=/ \
+ 	--cc=tcc \
+-	--extra-ldflags="-Wl,-dynamic-linker,${LDSO_PATH}" \
++	--extra-ldflags="-Wl,-dynamic-linker,/lib/libc.so" \
+ 	--sysincludepaths=/include \
+ 	--config-musl \
+ 	--libpaths='{B}:/lib' \
+-	--elfinterp="${LDSO_PATH}" \
++	--elfinterp=/lib/libc.so \
+ 	--crtprefix=/lib \
+ 	--tccdir=/lib/tcc \
+ 	--config-bcheck=no
+ # Ensure dynamic musl link (configure may default LDFLAGS=-static for *gcc* names).
+-sed -i "s|^LDFLAGS=.*|LDFLAGS=-Wl,-dynamic-linker,${LDSO_PATH}|" config.mak
++sed -i 's|^LDFLAGS=.*|LDFLAGS=-Wl,-dynamic-linker,/lib/libc.so|' config.mak
+ # Drop a previous flat tccdir=/lib install if present.
+ rm -f /lib/libtcc1.a /lib/runmain.o /lib/bt-exe.o /lib/bt-log.o /lib/bt-dll.o /lib/bcheck.o
+ rm -rf /lib/include
+ make &amp;&amp; make install
+ # Keep argv0 as tcc so libtool matches tcc*); POSIX cc is a symlink.
+ ln -sfn tcc /bin/cc
+-ln -sfn libc.so "$LDSO_PATH"
+ printf '%s\n' '#!/bin/sh' 'tcc -ar "$@"' &gt; /bin/ar
+ printf '%s\n' '#!/bin/sh' 'exec true' &gt; /bin/ranlib
+ chmod +x /bin/ar /bin/ranlib
+diff --git a/www/SHA256SUMS b/www/SHA256SUMS
+index 7987831..18aa20b 100644
+--- a/www/SHA256SUMS
++++ b/www/SHA256SUMS
+@@ -4,5 +4,5 @@ a4f99c89fb6b2d97c829259a071c79838468b8f545ce15bd01672011c56d5811  rootfs-arm64.t
+ 0af2d1501e4e6c820ee8d8eead70b3ea3455fceefd33ee1cfdfc26af18115178  rootfs-radxacm5io.tar.gz
+ 06bb5b9fdda241a98a580594ed9698218bd2fcdfbd3e27b89543742b678b75bf  rootfs-rpi-cm5io.tar.gz
+ 6b859999760e0d59cf3ffe1bf2d7f1445dbad3c1317c57b5864ba5de12e7363a  rootfs-rpi3b+.tar.gz
+-336be7abb70930ab394ce65db2d193dc9ff821c1a55a11dc76f85c7e6b7f9771  rootfs-x86_64-generic.tar.gz
+-ad3d52203ff36ac3befbe3198637369a81dfca67534d7bde6e4e4370f04cdc2f  rootfs-x86_64.tar.gz
++eba825dd2336ba29c368c5c7cfc8fa2d0a562d5a9a09101b157d040bbab380f0  rootfs-x86_64-generic.tar.gz
++9b24f1461be8bb2c410751f6c0f4c4f8e7ba9ad42b4868ef38de417505469a75  rootfs-x86_64.tar.gz
+diff --git a/www/index.html b/www/index.html
+index 23834c5..3ecfd89 100644
+--- a/www/index.html
++++ b/www/index.html
+@@ -85,8 +85,8 @@ files. arch-only builds have no kernel; others do.
+ +------------------------+------+------------------+
+ | platform               | size | sha256           |
+ +------------------------+------+------------------+
+-| &lt;a href=rootfs-x86_64.tar.gz download&gt;x86_64&lt;/a&gt;                 | 4.7M | ad3d52203ff36ac3 |
+-| &lt;a href=rootfs-x86_64-generic.tar.gz download&gt;x86_64-generic&lt;/a&gt;         |  19M | 336be7abb70930ab |
++| &lt;a href=rootfs-x86_64.tar.gz download&gt;x86_64&lt;/a&gt;                 | 4.6M | 9b24f1461be8bb2c |
++| &lt;a href=rootfs-x86_64-generic.tar.gz download&gt;x86_64-generic&lt;/a&gt;         |  19M | eba825dd2336ba29 |
+ | &lt;a href=rootfs-arm64.tar.gz download&gt;arm64&lt;/a&gt;                  | 3.9M | a4f99c89fb6b2d97 |
+ | &lt;a href=rootfs-hpelitedesk.tar.gz download&gt;hp elite desk 800 g1&lt;/a&gt;   |  14M | 73752c23c40d1fdd |
+ | &lt;a href=rootfs-pinebookpro.tar.gz download&gt;pinebook pro&lt;/a&gt;           |  14M | 3e49689772dc0235 |
+</pre>
