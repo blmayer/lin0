@@ -17,7 +17,7 @@ LIBTLS_BEARSSL_MAJOR := 33
 MUSLURL    := https://musl.libc.org/releases/musl-$(MUSLVER).tar.gz
 LINUXURL   := https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$(LINUXVER).tar.xz
 # Generic PC/VM kernel tracks current stable (other platforms keep LINUXVER).
-GENERIC_LINUXVER := 7.2.6
+GENERIC_LINUXVER := 7.2.12
 GENERIC_LINUXURL := https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-$(GENERIC_LINUXVER).tar.xz
 TCCURL     := https://repo.or.cz/tinycc.git
 TOYBOXURL  := https://github.com/landley/toybox.git
@@ -28,7 +28,7 @@ LIBTLS_BEARSSL_URL := https://github.com/michaelforney/libtls-bearssl.git
 REGDBURL   := https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git/plain
 CACERT_URL := https://curl.se/ca/cacert.pem
 # Mozilla CA bundle via curl.se (mk-ca-bundle). Bump with the file.
-CACERT_SHA256 := f66dff1bdf8f96060b8177976f8b7d9254bc89bc4db933d769f7384d28480bc9
+CACERT_SHA256 := 796f1389bfea13c0ed78f663b765baaff54a508e5483786bd6ece73c5e3e3cbe
 TLS_CFLAGS := -Os -fPIC -ffunction-sections -fdata-sections \
 	-fno-asynchronous-unwind-tables -fno-unwind-tables
 ROOTFS_LIBBEARSSL := rootfs/lib/libbearssl.so.$(BEARSSLVER)

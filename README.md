@@ -44,7 +44,7 @@ tarball.
 
 ```sh
 make x86_64        # userland only (no kernel)
-make x86_64-generic       # that userland + Linux 7.2.6 for PCs/VMs
+make x86_64-generic       # that userland + Linux 7.2.12 for PCs/VMs
 make pinebookpro
 make rpizero       # also: make rpizero-img
 make radxacm5io    # rootfs tarball + hybrid disk image
@@ -81,8 +81,8 @@ have no kernel; the rest do. Raspberry Pi Zero is build-only (not published).
 +----------------------+------+------------------+------------------+
 | platform             | size | sha256           | build            |
 +----------------------+------+------------------+------------------+
-| x86_64               | 4.6M | 9b24f1461be8bb2c | make x86_64      |
-| x86_64-generic       |  19M | eba825dd2336ba29 | make x86_64-generic     |
+| x86_64               | 4.7M | 68b1229cbffc9a4b | make x86_64      |
+| x86_64-generic       |  19M | 3aa8c07ae4d28746 | make x86_64-generic     |
 | arm64                | 3.9M | a4f99c89fb6b2d97 | make arm64       |
 | hp elite desk 800 g1 |  14M | 73752c23c40d1fdd | make hpelitedesk |
 | pinebook pro         |  14M | 3e49689772dc0235 | make pinebookpro |
@@ -119,7 +119,7 @@ name. Kernel name is platform-specific (`vmlinuz`, `Image`, `zImage`, …).
 ### x86_64-generic (kernel + userland)
 
 `make x86_64-generic` builds the same musl/tcc userland as `x86_64` plus the current
-stable kernel (7.2.6) with the usual PC and VM drivers built in (no initrd):
+stable kernel (7.2.12) with the usual PC and VM drivers built in (no initrd):
 AHCI, NVMe, virtio, USB HID/storage, EFI stub, VGA/simpledrm, e1000/e1000e/r8169.
 
 The tarball includes one kernel, `/boot/vmlinuz` (EFI-stub bzImage). There is
@@ -231,7 +231,7 @@ find the rootfs.
 The tree is one Makefile. It fetches musl 1.2.6, TinyCC, toybox, mksh,
 GNU make, BearSSL, and libtls-bearssl, then chroots into the new rootfs
 to self-host tcc. Most platforms also build a kernel (no initrd). Generic
-uses Linux 7.2.6; the others use 6.13.3. Radxa follows Linus’s tree
+uses Linux 7.2.12; the others use 6.13.3. Radxa follows Linus’s tree
 (`RADXA_LINUXVER`, default `master`).
 
 Need a C toolchain on the host (`gcc`, `make`, `bison`, `flex`, `bc`).
