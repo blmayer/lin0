@@ -81,8 +81,8 @@ have no kernel; the rest do. Raspberry Pi Zero is build-only (not published).
 +----------------------+------+------------------+------------------+
 | platform             | size | sha256           | build            |
 +----------------------+------+------------------+------------------+
-| x86_64               | 4.7M | ad3d52203ff36ac3 | make x86_64      |
-| x86_64-generic       |  19M | 336be7abb70930ab | make x86_64-generic     |
+| x86_64               | 4.6M | 9b24f1461be8bb2c | make x86_64      |
+| x86_64-generic       |  19M | eba825dd2336ba29 | make x86_64-generic     |
 | arm64                | 3.9M | a4f99c89fb6b2d97 | make arm64       |
 | hp elite desk 800 g1 |  14M | 73752c23c40d1fdd | make hpelitedesk |
 | pinebook pro         |  14M | 3e49689772dc0235 | make pinebookpro |

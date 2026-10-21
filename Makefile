@@ -65,10 +65,12 @@ MUSL_ARCH = $(if $(filter $(PLATFORM),$(AARCH64_PLATS)),aarch64,$(if $(filter rp
 MUSL_LDSONAME := ld-musl-$(MUSL_ARCH).so.1
 ROOTFS_MUSL_LD := rootfs/lib/$(MUSL_LDSONAME)
 PLAT_CC := $(CURDIR)/rootfs/bin/musl-gcc
+# musl's libc.so is the dynamic linker. Do not bake in ld-musl-$ARCH.so.1.
+LIN0_ELFINTERP := /lib/libc.so
 
 TOYBOX_CFLAGS := -Os -fPIE -I$(CURDIR)/rootfs/include $(TLS_CFLAGS)
 TOYBOX_LDFLAGS = -pie -L$(CURDIR)/rootfs/lib -Wl,--gc-sections -Wl,-rpath,/lib \
-	-ltls -lbearssl -Wl,-dynamic-linker,/lib/$(MUSL_LDSONAME)
+	-ltls -lbearssl -Wl,-dynamic-linker,$(LIN0_ELFINTERP)
 TOYBOX_STRIP := strip -s -R .note -R .comment
 
 ETC_SRC := $(shell find etc \( -type f -o -type l \) ! -path 'etc/ssl/*')
@@ -263,6 +265,9 @@ rootfs/bin/toybox: configs/$(PLATFORM)-toybox.config build/toybox/.lin0-patched 
 		! readelf -S $@ | grep -q '\.symtab' || { echo "toybox not stripped" >&2; exit 1; }; \
 		readelf -d $@ | grep -q 'libtls\.so' || { echo "toybox missing NEEDED libtls" >&2; exit 1; }; \
 		readelf -d $@ | grep -q '\[libc\.so\]' || { echo "toybox missing NEEDED libc.so" >&2; exit 1; }; \
+		interp=$$(readelf -l $@ | sed -n 's/.*\[Requesting program interpreter: \(.*\)\]/\1/p'); \
+		[ "$$interp" = "$(LIN0_ELFINTERP)" ] || { \
+			echo "error: toybox interpreter is '$$interp', expected $(LIN0_ELFINTERP)" >&2; exit 1; }; \
 	fi
 	@! strings $@ | grep -q GLIBC_ || { echo "toybox linked against glibc" >&2; exit 1; }
 	@ls -lh $@ $(ROOTFS_TLS_LIBS)
@@ -275,16 +280,32 @@ rootfs/bin/make: rootfs/bin/musl-gcc build/make-$(MAKEVER)/configure
 	$(MAKE) -C build/make-$(MAKEVER) install
 	$(TOYBOX_STRIP) $@
 
+# Dynamic PIE. PT_INTERP is /lib/libc.so. musl's libc.so is the dynamic
+# linker; do not bake in /lib/ld-musl-$ARCH.so.1.
 rootfs/bin/sh: rootfs/bin/musl-gcc build/mksh/Build.sh
-	@echo "==> mksh"
-	cd build/mksh && chmod +x Build.sh && CC="$(PLAT_CC) -static --no-pie" ./Build.sh
+	@echo "==> mksh (dynamic musl)"
+	cd build/mksh && chmod +x Build.sh && \
+		CC="$(PLAT_CC)" \
+		CFLAGS="-Os -fPIE" \
+		LDFLAGS="-pie -Wl,-dynamic-linker,$(LIN0_ELFINTERP)" \
+		./Build.sh
 	install -c -s -m 555 build/mksh/mksh $@
 	mkdir -p rootfs/share/man/man1
 	-install -c -m 444 build/mksh/mksh.1 rootfs/share/man/man1/
+	@if command -v readelf >/dev/null; then \
+		interp=$$(readelf -l $@ | sed -n 's/.*\[Requesting program interpreter: \(.*\)\]/\1/p'); \
+		[ "$$interp" = "$(LIN0_ELFINTERP)" ] || { \
+			echo "error: mksh interpreter is '$$interp', expected $(LIN0_ELFINTERP)" >&2; exit 1; }; \
+		readelf -d $@ | grep -q '\[libc\.so\]' || { \
+			echo "error: mksh missing NEEDED libc.so" >&2; exit 1; }; \
+		! readelf -d $@ | grep -q 'libc\.so\.6\|ld-linux' || { \
+			echo "error: mksh linked against glibc" >&2; exit 1; }; \
+	fi
 
 # tcc named tcc (libtool tcc*); cc is a symlink. Dynamic musl only.
 # tccdir=/lib/tcc (private: libtcc1 + headers). Never tccdir=/lib (would create /lib/include).
-TCC_ELFINTERP := /lib/$(MUSL_LDSONAME)
+# --config-musl fills elfinterp only when empty, so --elfinterp=/lib/libc.so wins.
+TCC_ELFINTERP := $(LIN0_ELFINTERP)
 TCC_LDFLAGS := -Wl,-dynamic-linker,$(TCC_ELFINTERP) -L$(CURDIR)/rootfs/lib
 rootfs/bin/tcc: rootfs/bin/make rootfs/bin/sh build/tinycc/.git \
 		$(LINUX_HEADERS) $(BOOT_IMAGE) rootfs/bin/musl-gcc $(ROOTFS_MUSL_LD) \
@@ -449,7 +470,7 @@ skeleton-chroot: skeleton build/tinycc/.git scripts/make-target.sh
 	sudo mount -vt proc proc rootfs/proc
 	sudo mount -vt sysfs sysfs rootfs/sys
 	sudo chroot rootfs /bin/env -i HOME=/home/root PATH=/bin \
-		MUSL_LDSONAME=$(MUSL_LDSONAME) /tmp/make-target.sh \
+		/tmp/make-target.sh \
 		|| { sudo scripts/umounts.sh; exit 1; }
 	sudo scripts/umounts.sh
 
